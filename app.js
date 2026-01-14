@@ -1,9 +1,4 @@
-(function(){
-
-// GH Pages / diagnostics
-window.__LIFTAI_LOADED__ = true;
-window.__LIFTAI_BUILD__ = (window.__LIFTAI_BUILD__||'local');
-'use strict';
+(function(){'use strict';
 
 /* LiftAI v8.0.0 - Enhanced with Analytics, Recovery Tracking & Safety Features */
 
@@ -28,7 +23,8 @@ const SK_BASE={
   aiLog:'liftai_ai_log_v1',
   ui:'liftai_ui_v1',
   savedBlocks:'liftai_saved_blocks_v2',
-  sessionReadiness:'liftai_session_readiness_v9'
+  sessionReadiness:'liftai_session_readiness_v9',
+  pendingTransition:'liftai_pending_transition_v1'
 };
 
 let ACTIVE_PROFILE_ID='default';
@@ -57,14 +53,19 @@ function refreshSK(){
     aiLog: makeProfiledKey(SK_BASE.aiLog, ACTIVE_PROFILE_ID),
     ui: makeProfiledKey(SK_BASE.ui, ACTIVE_PROFILE_ID),
     savedBlocks: makeProfiledKey(SK_BASE.savedBlocks, ACTIVE_PROFILE_ID),
-    sessionReadiness: makeProfiledKey(SK_BASE.sessionReadiness, ACTIVE_PROFILE_ID)
+    sessionReadiness: makeProfiledKey(SK_BASE.sessionReadiness, ACTIVE_PROFILE_ID),
+    pendingTransition: makeProfiledKey(SK_BASE.pendingTransition, ACTIVE_PROFILE_ID)
   };
 }
 
 function defaultProfile(){
   return {
     units:'kg',
-    snatch:0,
+    
+    athleteMode:'recreational',
+    transitionWeeks:1,
+    transitionProfile:'standard',
+snatch:0,
     cleanJerk:0,
     frontSquat:0,
     backSquat:0,
@@ -78,6 +79,157 @@ function defaultProfile(){
     sessionDuration:75
   };
 }
+
+
+// Profile normalization / schema evolution (non-breaking)
+function normalizeProfile(prof){
+  const base=defaultProfile();
+  const p={...base, ...(prof||{})};
+
+  // Athlete profile fields (optional)
+  if(p.age===undefined) p.age=null; // number or null
+  if(p.trainingAgeYears===undefined) p.trainingAgeYears=1; // years of consistent WL training
+  if(p.recoveryCapacity===undefined) p.recoveryCapacity=3; // 1-5
+  if(p.macroPeriod===undefined) p.macroPeriod='PP'; // GDP, PP, CC, TP
+  if(p.taperStyle===undefined) p.taperStyle='default'; // default | cwfhc
+  if(p.heavySingleExposure===undefined) p.heavySingleExposure=false; // opt-in
+
+  // Injury flags (optional)
+  if(!p.injuries || typeof p.injuries!=='object'){
+    p.injuries={shoulder:false, wrist:false, elbow:false, back:false, hip:false, knee:false, ankle:false};
+  } else {
+    const d={shoulder:false, wrist:false, elbow:false, back:false, hip:false, knee:false, ankle:false};
+    p.injuries={...d, ...p.injuries};
+  }
+
+  // Working max layer (Juggernaut-style conservative)
+  if(!p.workingMax || typeof p.workingMax!=='object'){
+    p.workingMax={
+      snatch: p.snatch? Math.round(p.snatch*0.90):0,
+      cleanJerk: p.cleanJerk? Math.round(p.cleanJerk*0.90):0,
+      frontSquat: p.frontSquat? Math.round(p.frontSquat*0.90):0,
+      backSquat: p.backSquat? Math.round(p.backSquat*0.90):0
+    };
+  } else {
+    const wm=p.workingMax;
+    p.workingMax={
+      snatch: (wm.snatch||0) || (p.snatch? Math.round(p.snatch*0.90):0),
+      cleanJerk: (wm.cleanJerk||0) || (p.cleanJerk? Math.round(p.cleanJerk*0.90):0),
+      frontSquat: (wm.frontSquat||0) || (p.frontSquat? Math.round(p.frontSquat*0.90):0),
+      backSquat: (wm.backSquat||0) || (p.backSquat? Math.round(p.backSquat*0.90):0)
+    };
+  }
+
+  // Meet planning (optional)
+  if(p.competitionDate===undefined) p.competitionDate=null; // ISO date string or null
+  if(p.autoMacroFromMeet===undefined) p.autoMacroFromMeet=false;
+
+  // Weak-point focus (optional)
+  if(p.limiter===undefined) p.limiter='balanced';
+
+  // Variant windows / rotation state (stored per block)
+  if(!p.variantState || typeof p.variantState!=='object') p.variantState={};
+
+  // Derived flags
+  p.isMasters = (typeof p.age==='number' && p.age>=35) ? true : !!p.isMasters;
+
+  return p;
+}
+
+function getLiftBaseMax(prof, liftKey){
+  const p=normalizeProfile(prof);
+  const wm=(p.workingMax && p.workingMax[liftKey]) ? p.workingMax[liftKey] : 0;
+  const rm=(p[liftKey]||0);
+  return wm>0 ? wm : rm;
+}
+
+// Macrocycle multipliers (kept conservative to avoid breaking existing output)
+function getMacroMultipliers(prof, periodOverride){
+  const p=normalizeProfile(prof);
+  const period=String(periodOverride||p.macroPeriod||'PP').toUpperCase();
+  if(period==='GDP') return {intensity:0.95, volume:1.10, specificityBias:'general'};
+  if(period==='CC')  return {intensity:1.03, volume:0.92, specificityBias:'specific'};
+  if(period==='TP')  return {intensity:0.85, volume:0.70, specificityBias:'restore'};
+  return {intensity:1.00, volume:1.00, specificityBias:'balanced'}; // PP
+}
+
+function getAgeMultipliers(prof){
+  const p=normalizeProfile(prof);
+  const age=(typeof p.age==='number')?p.age:null;
+  const rec=Math.max(1, Math.min(5, parseInt(p.recoveryCapacity,10)||3));
+  let intensity=1.0, volume=1.0;
+  if(age!==null){
+    if(age>=40){ volume*=0.95; }
+    if(age>=50){ volume*=0.88; intensity*=0.97; }
+    if(age>=60){ volume*=0.78; intensity*=0.94; }
+  }
+  if(rec<=2) volume*=0.92;
+  if(rec>=4) volume*=1.04;
+  return {intensity, volume};
+}
+
+function getTrainingAgeMultipliers(prof){
+  const p=normalizeProfile(prof);
+  const ta=Math.max(0, parseFloat(p.trainingAgeYears)||1);
+  if(ta<1) return {intensity:0.97, volume:1.05};
+  if(ta<3) return {intensity:1.00, volume:1.00};
+  return {intensity:1.00, volume:0.98};
+}
+
+function getWeeklyStressCap(prof){
+  const p=normalizeProfile(prof);
+  let cap=120;
+  if(p.isMasters) cap=100;
+  const ta=Math.max(0, parseFloat(p.trainingAgeYears)||1);
+  if(ta<1) cap=110;
+  const rec=Math.max(1, Math.min(5, parseInt(p.recoveryCapacity,10)||3));
+  if(rec<=2) cap*=0.90;
+  if(rec>=4) cap*=1.05;
+  return Math.round(cap);
+}
+
+function weeksBetween(d1,d2){
+  const ms= (d2.getTime()-d1.getTime());
+  return ms/ (1000*60*60*24*7);
+}
+
+function getMeetDate(prof){
+  const p=normalizeProfile(prof);
+  if(!p.competitionDate) return null;
+  const d=new Date(p.competitionDate);
+  if(isNaN(d.getTime())) return null;
+  return d;
+}
+
+// If autoMacroFromMeet is enabled and a meet date exists, derive the effective macro period for a given week start.
+function getEffectiveMacroPeriod(prof, weekStartDate){
+  const p=normalizeProfile(prof);
+  const meet=getMeetDate(p);
+  if(!meet || !p.autoMacroFromMeet) return String(p.macroPeriod||'PP').toUpperCase();
+  const w=weeksBetween(weekStartDate, meet); // positive if meet in future
+  if(w>12) return 'GDP';
+  if(w>8)  return 'PP';
+  if(w>2)  return 'CC';
+  if(w>=-1 && w<=2) return 'CC'; // include meet + immediate aftermath as CC (taper/meet)
+  return 'TP';
+}
+
+function isMeetWeek(prof, weekStartDate){
+  const meet=getMeetDate(prof);
+  if(!meet) return false;
+  const end=new Date(weekStartDate); end.setDate(end.getDate()+7);
+  return meet>=weekStartDate && meet<end;
+}
+
+function isControlTestWeek(prof, weekStartDate){
+  const p=normalizeProfile(prof);
+  const meet=getMeetDate(p);
+  if(!meet) return false;
+  const w=Math.round(weeksBetween(weekStartDate, meet));
+  // Common checkpoints: ~6 weeks out and ~3 weeks out
+  return (w===6 || w===3);
+}
+
 
 function loadProfilesIndex(){
   const idx=getStorage(GLOBAL_KEYS.profilesIndex, null);
@@ -183,7 +335,22 @@ window.showInfo=function(key){
       title:'Program type',
       body:'Adjusts the emphasis of each week: General balances technique + strength, Strength pushes heavier squats/pulls, Hypertrophy adds more volume, Competition tightens specificity, Technique adds more lighter-quality reps.'
     },
-    blocks:{
+
+    athletedetails:{
+      title:'Athlete details',
+      body:'Optional inputs used to make the program more individualized and safer. Age/training age/recovery adjust weekly stress and exercise selection. Injury flags bias toward lower-impact variations. Macro period shifts general→specific emphasis. The CWFHC taper option uses 3-session 90/70/50 load reduction in the final taper week.'
+    },
+
+    
+    mode:{
+      title:'Athlete mode',
+      body:'Recreational prioritizes sustainable progression (more conservative intensity/volume and stronger safety rails). Competition increases specificity and supports a clearer taper/peak, with slightly higher intensity exposure but managed volume.'
+    },
+    transition:{
+      title:'Program switch ramp-in',
+      body:'If you start a new program while coming off another block, ramp-in reduces early-week intensity and volume to lower overtraining/injury risk. Week 1 is the biggest reduction, week 2 eases closer to normal.'
+    },
+blocks:{
       title:'Blocks equipment',
       body:'If you have lifting blocks, the program can include “from blocks” variations. If disabled, those are swapped for hang/alternate variations so the plan still works with minimal equipment.'
     },
@@ -1846,6 +2013,38 @@ function generateRecommendations(avgRPE,missRate){
 }
 
 // Apply performance-based adjustments to next week
+
+function updateWorkingMaxFromAnalysis(analysis){
+  try{
+    const profile=getStorage(SK.profile);
+    if(!profile || !analysis) return {updated:false};
+    const p=normalizeProfile(profile);
+    const wm={...p.workingMax};
+    // Use conservative updates: move 20% toward 90% of estimated true max
+    const smooth=0.20;
+    const unit=p.units||'kg';
+    const updates=[];
+    const apply=(key, estTrueMax)=>{
+      if(!estTrueMax || !isFinite(estTrueMax) || estTrueMax<=0) return;
+      const target=estTrueMax*0.90;
+      const cur=wm[key]||0;
+      const next=(cur>0) ? (cur*(1-smooth) + target*smooth) : target;
+      wm[key]=roundToIncrement(next, p.units);
+      updates.push(`${key}: ${wm[key]}${unit}`);
+    };
+    apply('snatch', analysis.snatch);
+    apply('cleanJerk', analysis.cleanJerk);
+    apply('frontSquat', analysis.frontSquat);
+    apply('backSquat', analysis.backSquat);
+    if(updates.length){
+      p.workingMax=wm;
+      p.lastWorkingMaxUpdate=new Date().toISOString();
+      setStorage(SK.profile, p);
+      return {updated:true, updates};
+    }
+    return {updated:false};
+  }catch(e){ return {updated:false, error:e.message}; }
+}
 function applyPerformanceAdjustments(completedSessionId){
   try{
     const sessions=getStorage(SK.sessions,[]);
@@ -1904,7 +2103,8 @@ function applyPerformanceAdjustments(completedSessionId){
     if(adjustedCount>0){
       const success=setStorage(SK.sets,updatedSets);
       if(!success)throw new Error('Failed to apply adjustments');
-      
+
+      const wmUpdate=updateWorkingMaxFromAnalysis(analysis);
       const profile=getStorage(SK.profile);
       const unit=profile?.units||'kg';
       const increases=[];
@@ -2093,8 +2293,33 @@ function getAllExercisesForFamily(family, opts = {}) {
   return all;
 }
 
+
+function inferExerciseTags(exName){
+  const n=String(exName||'').toLowerCase();
+  const tags=new Set();
+  if(n.includes('power')) tags.add('speed');
+  if(n.includes('hang')||n.includes('block')||n.includes('pause')||n.includes('knee')||n.includes('hip')) tags.add('positional');
+  if(n.includes('pull')) tags.add('pull_strength');
+  if(n.includes('deficit')||n.includes('snatch pull')||n.includes('clean pull')) tags.add('pull_strength');
+  if(n.includes('balance')||n.includes('overhead')||n.includes('press')||n.includes('jerk')) tags.add('overhead');
+  if(n.includes('drop')||n.includes('from blocks')||n.includes('high hang')||n.includes('tall')) tags.add('turnover');
+  if(n.includes('snatch balance')||n.includes('oh squat')||n.includes('overhead squat')||n.includes('jerk balance')) tags.add('receiving');
+  if(n.includes('squat')) tags.add('squat_strength');
+  return tags;
+}
+
+function limiterDesiredTags(limiter){
+  const l=String(limiter||'balanced').toLowerCase();
+  if(l==='pull') return ['pull_strength','positional'];
+  if(l==='turnover') return ['turnover','positional'];
+  if(l==='receiving') return ['receiving','overhead'];
+  if(l==='overhead') return ['overhead','receiving'];
+  if(l==='squat') return ['squat_strength'];
+  if(l==='speed') return ['speed'];
+  return []; // balanced
+}
 function selectExerciseFromCategory(category, opts = {}) {
-  const { phase, philosophy, recentExercises = [], includeBlocks = true } = opts;
+  const { phase, philosophy, recentExercises = [], includeBlocks = true, limiter='balanced', injuries={}, masters=false, macroBias='balanced' } = opts;
   if (!category || category.length === 0) return null;
   const cfg = BLOCK_PHILOSOPHIES[philosophy] || BLOCK_PHILOSOPHIES.technique_focused;
 
@@ -2114,6 +2339,22 @@ function selectExerciseFromCategory(category, opts = {}) {
     let score = ex.specificityScore || 0.5;
     if (ex.bestPhases.includes(phase)) score += 0.2;
     if (ex.variationType) ex.variationType.forEach(vt => { if (cfg.exerciseWeights[vt]) score *= cfg.exerciseWeights[vt]; });
+    // Weak-point targeting (light touch; keeps output stable unless user chooses a limiter)
+    const desired=limiterDesiredTags(limiter);
+    if(desired.length){
+      const tags=inferExerciseTags(ex.name);
+      let matches=0;
+      desired.forEach(t=>{ if(tags.has(t)) matches++; });
+      score += matches*0.12;
+    }
+    // Macro bias: in CC prefer more specific, in GDP prefer more general (nudges, not hard rules)
+    if(macroBias==='specific' && (ex.specificityScore||0.5)>=0.85) score += 0.05;
+    if(macroBias==='general' && (ex.specificityScore||0.5)<=0.80) score += 0.05;
+    // Masters / injury nudges away from very fatiguing options
+    if(masters) score -= (ex.fatigueScore||0)*0.03;
+    if(injuries && (injuries.shoulder||injuries.wrist||injuries.elbow)){
+      if(String(ex.name||'').toLowerCase().includes('jerk') || String(ex.name||'').toLowerCase().includes('overhead')) score -= 0.08;
+    }
     score -= recentExercises.filter(r => r === ex.name).length * 0.25;
     if (phase === 'deload') score -= ex.fatigueScore * 0.1;
     return { ex, score: Math.max(0.1, score) };
@@ -2134,6 +2375,20 @@ function selectSnatchExercise(opts) {
     ((phase === 'peak' || phase === 'intensification') ? 'classic'
       : (cfg.preferredCategories.find(p => EXERCISE_DATABASE.snatch[p]) || 'power'));
 
+
+// Masters / restoration bias: prefer lower-impact variations unless peaking
+if (opts && (opts.macroBias === 'restore')) {
+  cat = 'power';
+}
+if (opts && opts.masters) {
+  const inj = opts.injuries || {};
+  const highRisk = !!(inj.wrist || inj.shoulder || inj.elbow);
+  if ((phase !== 'peak' && phase !== 'intensification') || highRisk) {
+    cat = 'power';
+  }
+}
+
+
   if (opts && opts.includeBlocks === false && cat === 'blocks') {
     cat = 'hang';
   }
@@ -2150,6 +2405,20 @@ function selectCleanExercise(opts) {
     ((phase === 'peak' || phase === 'intensification') ? 'classic'
       : (cfg.preferredCategories.find(p => EXERCISE_DATABASE.clean[p]) || 'power'));
 
+
+// Masters / restoration bias: prefer lower-impact variations unless peaking
+if (opts && (opts.macroBias === 'restore')) {
+  cat = 'power';
+}
+if (opts && opts.masters) {
+  const inj = opts.injuries || {};
+  const highRisk = !!(inj.wrist || inj.shoulder || inj.elbow);
+  if ((phase !== 'peak' && phase !== 'intensification') || highRisk) {
+    cat = 'power';
+  }
+}
+
+
   if (opts && opts.includeBlocks === false && cat === 'blocks') {
     cat = 'hang';
   }
@@ -2163,6 +2432,20 @@ function selectJerkExercise(opts) {
 
   let cat = preferredCategory ||
     ((phase === 'peak' || phase === 'intensification') ? 'classic' : 'power');
+
+
+// Masters / restoration bias: prefer lower-impact variations unless peaking
+if (opts && (opts.macroBias === 'restore')) {
+  cat = 'power';
+}
+if (opts && opts.masters) {
+  const inj = opts.injuries || {};
+  const highRisk = !!(inj.wrist || inj.shoulder || inj.elbow);
+  if ((phase !== 'peak' && phase !== 'intensification') || highRisk) {
+    cat = 'power';
+  }
+}
+
 
   if (opts && opts.includeBlocks === false && cat === 'blocks') {
     cat = 'power';
@@ -2384,14 +2667,49 @@ function getSquatScheme(progType,phase){
 }
 
 // Exercise Selection for main lifting days - INTELLIGENT VERSION
-function selectExercises(focusType, progType, phase, weekInPhase, philosophy, prof, recentExercises) {
+
+function getVariantWindowLength(slot, prof, macroPeriod){
+  const p=normalizeProfile(prof);
+  const period=String(macroPeriod||p.macroPeriod||'PP').toUpperCase();
+  // Main lift variants should be stable longer; secondary rotates a bit faster.
+  let base = (slot==='main') ? 3 : 2;
+  if(period==='GDP') base = (slot==='main') ? 2 : 1;
+  if(period==='CC')  base = (slot==='main') ? 4 : 2;
+  if(period==='TP')  base = 1;
+  // Newer lifters benefit from stable variants
+  const ta=Math.max(0, parseFloat(p.trainingAgeYears)||1);
+  if(ta<1 && base<4) base += 1;
+  if(p.isMasters && base>3) base -= 1;
+  return Math.max(1, Math.min(6, base));
+}
+
+function getLockedVariant(variantState, focusKey, slot, week){
+  const vs=variantState||{};
+  const fk=String(focusKey||'').toLowerCase();
+  if(!vs[fk] || !vs[fk][slot]) return null;
+  const st=vs[fk][slot];
+  if(st && st.name && typeof st.expiresWeek==='number' && week<=st.expiresWeek) return st.name;
+  return null;
+}
+
+function lockVariant(variantState, focusKey, slot, name, week, windowLen){
+  if(!variantState) return;
+  const fk=String(focusKey||'').toLowerCase();
+  if(!variantState[fk]) variantState[fk]={};
+  variantState[fk][slot]={name:name, startWeek:week, expiresWeek:week+windowLen-1};
+}
+function selectExercises(focusType, progType, phase, weekInPhase, philosophy, prof, recentExercises, variantState, weekNumber, macroPeriodEffective) {
   const result = { main: '', mainType: '', secondary: '', secType: '', strength: '', strengthType: '', accessory: '' };
   
   const selectionOpts = {
     phase: phase,
     philosophy: philosophy || 'technique_focused',
     includeBlocks: prof?.includeBlocks !== false,
-    recentExercises: recentExercises || []
+    recentExercises: recentExercises || [],
+    masters: !!prof?.isMasters,
+    macroBias: getMacroMultipliers(prof, macroPeriodEffective).specificityBias,
+    limiter: prof?.limiter || 'balanced',
+    injuries: prof?.injuries || {}
   };
   
   if (focusType === 'snatch') {
@@ -2400,7 +2718,11 @@ function selectExercises(focusType, progType, phase, weekInPhase, philosophy, pr
     result.strengthType = 'squat';
     
     // Use intelligent selection from database
-    const mainEx = selectSnatchExercise(selectionOpts);
+    const lockedMain = getLockedVariant(variantState, 'snatch', 'main', weekNumber);
+    const mainEx = lockedMain ? { name: lockedMain } : selectSnatchExercise(selectionOpts);
+    if(!lockedMain && mainEx && mainEx.name){
+      lockVariant(variantState,'snatch','main',mainEx.name,weekNumber,getVariantWindowLength('main',prof,macroPeriodEffective));
+    };
     result.main = mainEx ? mainEx.name : 'Snatch';
     
     // Select secondary (pull or receiving exercise)
@@ -2470,7 +2792,39 @@ function getDayType(dayNum, mainDays, accessoryDays) {
 }
 
 // Generate Training Block - INTELLIGENT VERSION
+
+// NEW: Transition (ramp-in) helpers for safer program switching
+function getTransitionProfileDefaults(transitionProfile){
+  const p=String(transitionProfile||'standard').toLowerCase();
+  if(p==='aggressive') return { w1:{intensity:0.96, volume:0.85}, w2:{intensity:0.98, volume:0.93} };
+  if(p==='conservative') return { w1:{intensity:0.90, volume:0.70}, w2:{intensity:0.95, volume:0.85} };
+  return { w1:{intensity:0.92, volume:0.75}, w2:{intensity:0.96, volume:0.90} }; // standard
+}
+
+function getModeAdjustedTransition(athleteMode, base){
+  const mode=String(athleteMode||'recreational').toLowerCase();
+  // Competition lifters often keep intensity exposure slightly higher but reduce volume more.
+  if(mode==='competition'){
+    return {
+      w1:{ intensity:Math.min(0.97, Math.max(0.88, base.w1.intensity+0.02)), volume:Math.max(0.60, base.w1.volume-0.05) },
+      w2:{ intensity:Math.min(0.99, Math.max(0.90, base.w2.intensity+0.01)), volume:Math.max(0.75, base.w2.volume-0.03) }
+    };
+  }
+  return base;
+}
+
+function getTransitionMultipliersForWeek(prof, week){
+  const weeks=parseInt(prof.transitionWeeks||0,10)||0;
+  if(!weeks || week>weeks) return { intensity:1.0, volume:1.0 };
+  const base=getModeAdjustedTransition(prof.athleteMode, getTransitionProfileDefaults(prof.transitionProfile));
+  if(week===1) return { intensity:base.w1.intensity, volume:base.w1.volume };
+  if(week===2) return { intensity:base.w2.intensity, volume:base.w2.volume };
+  // If user ever chooses >2 in future, just use week2 values for the remainder.
+  return { intensity:base.w2.intensity, volume:base.w2.volume };
+}
+
 function generateTrainingBlock(prof){
+  prof=normalizeProfile(prof);
   const blockId=uuid();
   
   // Determine block philosophy based on history
@@ -2500,9 +2854,19 @@ function generateTrainingBlock(prof){
   // Track exercises for variety
   const blockExerciseUsage = [];
   const recentExercises = getRecentExercises(14);
+  const variantState = {};
   
   for(let week=1;week<=prof.blockLength;week++){
     const phaseInfo=getPhaseInfo(week,prof.blockLength,prof.programType);
+    const weekStartDate=new Date();
+    weekStartDate.setDate(weekStartDate.getDate()+((week-1)*7));
+    const macroPeriodEffective=getEffectiveMacroPeriod(prof, weekStartDate);
+    const macroMult=getMacroMultipliers(prof, macroPeriodEffective);
+    const ageMult=getAgeMultipliers(prof);
+    const taMult=getTrainingAgeMultipliers(prof);
+    const meetWeek=isMeetWeek(prof, weekStartDate);
+    const controlTestWeek=isControlTestWeek(prof, weekStartDate);
+    let cwfhcSessionIdx=0;
     
     // Apply philosophy modifiers to phase intensity
     const adjustedIntensity = Math.max(0.50, Math.min(0.98, phaseInfo.intensity + philosophyConfig.intensityMod));
@@ -2510,6 +2874,16 @@ function generateTrainingBlock(prof){
     const volumeMultMap = { standard: 1.0, reduced: 0.75, minimal: 0.60 };
     const volumePreferenceMult = volumeMultMap[volumePref] ?? 0.75;
     const adjustedVolume = phaseInfo.volume * philosophyConfig.volumeMod * volumePreferenceMult;
+
+    // Apply macro/age/training-age multipliers (kept conservative)
+    const adjustedIntensityFinal = Math.max(0.50, Math.min(0.98, adjustedIntensity * macroMult.intensity * ageMult.intensity * taMult.intensity));
+    const adjustedVolumeFinal = Math.max(0.40, adjustedVolume * macroMult.volume * ageMult.volume * taMult.volume);
+
+    // Apply ramp-in multipliers when switching programs mid-cycle (weeks 1-2)
+    const transitionMult = getTransitionMultipliersForWeek(prof, week);
+    const rampedIntensity = Math.max(0.50, Math.min(0.98, adjustedIntensityFinal * transitionMult.intensity));
+    const rampedVolume = adjustedVolumeFinal * transitionMult.volume;
+
     
     const weekInPhase=week%4||4;
     
@@ -2603,13 +2977,13 @@ function generateTrainingBlock(prof){
           
           let baseMax = prof.backSquat;
           if (ex.category === 'squats') {
-            baseMax = ex.name.includes('Front') ? prof.frontSquat : prof.backSquat;
+            baseMax = ex.name.includes('Front') ? getLiftBaseMax(prof,'frontSquat') : getLiftBaseMax(prof,'backSquat');
           } else if (ex.category === 'pulls') {
-            baseMax = ex.name.includes('Snatch') ? prof.snatch * PULL_MAX_MULTIPLIER : prof.cleanJerk * PULL_MAX_MULTIPLIER;
+            baseMax = ex.name.includes('Snatch') ? getLiftBaseMax(prof,'snatch') * PULL_MAX_MULTIPLIER : getLiftBaseMax(prof,'cleanJerk') * PULL_MAX_MULTIPLIER;
           } else if (ex.category === 'pressing') {
-            baseMax = prof.cleanJerk * 0.6;
+            baseMax = getLiftBaseMax(prof,'cleanJerk') * 0.6;
           } else if (ex.category === 'posteriorChain') {
-            baseMax = prof.backSquat * 0.7;
+            baseMax = getLiftBaseMax(prof,'backSquat') * 0.7;
           }
           
           for(let i=0;i<ex.sets;i++){
@@ -2639,7 +3013,7 @@ function generateTrainingBlock(prof){
       
       // Use intelligent exercise selection with philosophy and variety tracking
       const allRecentExercises = [...recentExercises, ...blockExerciseUsage];
-      const exercises=selectExercises(focusType, prof.programType, phaseInfo.phase, weekInPhase, philosophy, prof, allRecentExercises);
+      const exercises=selectExercises(focusType, prof.programType, phaseInfo.phase, weekInPhase, philosophy, prof, allRecentExercises, variantState, week, macroPeriodEffective);
       
       // Track exercise usage for variety
       if (exercises.main) blockExerciseUsage.push(exercises.main);
@@ -2647,6 +3021,19 @@ function generateTrainingBlock(prof){
       
       const scheme=getSetScheme(prof.programType,phaseInfo.phase);
       const sqScheme=getSquatScheme(prof.programType,phaseInfo.phase);
+
+      // Meet / taper / test day context
+      const meetDate=getMeetDate(prof);
+      const isMeetW=!!meetWeek;
+      const isControlTest = !!(controlTestWeek && !isMeetW);
+      let sessionScale=1.0;
+      if(prof.taperStyle==='cwfhc' && isMeetW && meetDate && startDate < meetDate && cwfhcSessionIdx<3){
+        const scales=[0.90,0.70,0.50];
+        sessionScale=scales[cwfhcSessionIdx]||1.0;
+        cwfhcSessionIdx++;
+      }
+      // Reduce volume slightly on control test sessions to keep fatigue manageable
+      const isTestSession = isControlTest && (weekInPhase===3 || phaseInfo.phase==='intensification');
       
       sessions.push({
         id:sessionId,
@@ -2656,6 +3043,9 @@ function generateTrainingBlock(prof){
         date:startDate.toISOString(),
         focusType,
         phase:phaseInfo.phase,
+        macroPeriod: macroPeriodEffective,
+        isTestSession: !!isTestSession,
+        sessionScale: sessionScale,
         philosophy: philosophy,
         title:`Week ${week}, Day ${day} — ${focusType.toUpperCase()}`,
         status:'planned',
@@ -2663,9 +3053,9 @@ function generateTrainingBlock(prof){
         exercises:exercises
       });
       
-      const mainMax=exercises.mainType==='snatch'?prof.snatch:prof.cleanJerk;
-      const secMax=exercises.secType==='snatch'?prof.snatch:prof.cleanJerk;
-      const sqMax=exercises.strength==='Front Squat'?prof.frontSquat:prof.backSquat;
+      const mainMax=exercises.mainType==='snatch'?getLiftBaseMax(prof,'snatch'):getLiftBaseMax(prof,'cleanJerk');
+      const secMax=exercises.secType==='snatch'?getLiftBaseMax(prof,'snatch'):getLiftBaseMax(prof,'cleanJerk');
+      const sqMax=exercises.strength==='Front Squat'?getLiftBaseMax(prof,'frontSquat'):getLiftBaseMax(prof,'backSquat');
       
       let setIdx=0;
       const warmupInts=[0.60,0.70,0.78,0.85];
@@ -2678,7 +3068,8 @@ function generateTrainingBlock(prof){
       }
       
       // Use adjusted intensity from philosophy
-      const mainIntensity = adjustedIntensity;
+      const volScaleBase = sessionScale * (isTestSession ? 0.85 : 1.0);
+      const mainIntensity = Math.max(0.50, Math.min(0.98, rampedIntensity*sessionScale));
       
       scheme.warmup.forEach((reps,i)=>{
         if(i<warmupInts.length){
@@ -2699,10 +3090,34 @@ function generateTrainingBlock(prof){
         }
       });
       
+      // Optional heavy single exposure (and required on test sessions)
+      const doHeavySingle = (!!prof.heavySingleExposure || !!isTestSession) && phaseInfo.phase!=='deload';
+      if(doHeavySingle){
+        let singleInt = mainIntensity;
+        if(phaseInfo.phase==='accumulation') singleInt = Math.min(0.90, mainIntensity+0.04);
+        else if(phaseInfo.phase==='intensification') singleInt = Math.min(0.97, mainIntensity+0.05);
+        else if(phaseInfo.phase==='peak') singleInt = Math.min(1.02, mainIntensity+0.06);
+        if(isTestSession) singleInt = Math.min(1.05, mainIntensity+0.08);
+        if(prof.isMasters) singleInt = Math.max(0.70, singleInt-0.02);
+        sets.push({
+          id:uuid(),
+          sessionId,
+          blockOrder:1,
+          setIndex:++setIdx,
+          exercise:exercises.main,
+          type:(isTestSession?'test_single':'heavy_single'),
+          exerciseType:exercises.mainType,
+          targetReps:1,
+          targetIntensity:Math.max(0.65, Math.min(1.05, singleInt)),
+          suggestedWeight:calculateWeight(mainMax,Math.max(0.65, Math.min(1.05, singleInt)),prof.units),
+          targetRPE:(isTestSession?8.5:8.0)
+        });
+      }
+
       // Recreational volume controls (applies to WORKING sets only; warmups unchanged)
       const maxMainWorkRepsMap={standard:18,reduced:12,minimal:10};
       const baseMaxMainWorkReps=maxMainWorkRepsMap[volumePref]||12;
-      const maxMainWorkReps=Math.max(6,Math.round(baseMaxMainWorkReps*timeMultiplier));
+      const maxMainWorkReps=Math.max(6,Math.round(baseMaxMainWorkReps*timeMultiplier*volScaleBase));
       const capTopSetsMap={standard:999,reduced:3,minimal:2};
       const capBackoffSetsMap={standard:999,reduced:2,minimal:1};
       let mainWorkReps=0;
@@ -2736,7 +3151,7 @@ for(let i=0;i<scheme.top.length;i++){
       }
       
       const backoffInt=phaseInfo.phase==='intensification'?(mainIntensity-0.08):(mainIntensity-0.10);
-      const rawBackoffCount=Math.floor(scheme.backoffSets*adjustedVolume*timeMultiplier);
+      const rawBackoffCount=Math.floor(scheme.backoffSets*rampedVolume*timeMultiplier*volScaleBase);
       const backoffCount=Math.min(rawBackoffCount,(capBackoffSetsMap[volumePref]||rawBackoffCount));
       for(let i=0;i<backoffCount;i++){
         if(mainWorkReps + scheme.backoff > maxMainWorkReps) break;
@@ -2758,7 +3173,7 @@ for(let i=0;i<scheme.top.length;i++){
       
       setIdx=0;
       const secInt=phaseInfo.phase==='accumulation'?0.75:0.80;
-      const secSets=Math.floor(3*adjustedVolume*timeMultiplier);
+      const secSets=Math.floor(3*rampedVolume*timeMultiplier);
       const secReps=exercises.secondary.includes('Pull')?3:scheme.backoff;
       const pullMax=exercises.secondary.includes('Pull')?(secMax*PULL_MAX_MULTIPLIER):secMax;
       
@@ -2780,7 +3195,7 @@ for(let i=0;i<scheme.top.length;i++){
       
       if (prof.sessionDuration >= 60) {
         setIdx=0;
-        const sqSets=Math.floor(sqScheme.sets*adjustedVolume*timeMultiplier);
+        const sqSets=Math.floor(sqScheme.sets*rampedVolume*timeMultiplier);
         for(let i=0;i<sqSets;i++){
           sets.push({
             id:uuid(),
@@ -2896,6 +3311,19 @@ function clearSetupForm(){
   $('setupUnits').value=(existingProf && existingProf.units)?existingProf.units:'kg';
   $('setupBlockLength').value='8';
   $('setupProgram').value='general';
+
+  // NEW: Athlete mode + transition defaults
+  if($('setupAthleteMode')) $('setupAthleteMode').value = (existingProf && existingProf.athleteMode) ? existingProf.athleteMode : 'recreational';
+  if($('setupTransitionProfile')) $('setupTransitionProfile').value = (existingProf && existingProf.transitionProfile) ? existingProf.transitionProfile : 'standard';
+  // If user just started a new block while mid-program, suggest a ramp-in automatically.
+  const pending=getStorage(SK.pendingTransition,null);
+  if($('setupTransitionWeeks')){
+    let w = (existingProf && typeof existingProf.transitionWeeks!=='undefined') ? existingProf.transitionWeeks : 1;
+    if(pending && pending.recommendedWeeks!=null){
+      w = pending.recommendedWeeks;
+    }
+    $('setupTransitionWeeks').value = String(w);
+  }
   $('setupDuration').value='75';
     if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked = (existingProf ? (existingProf.includeBlocks !== false) : true);
     if($('setupVolumePref')) $('setupVolumePref').value = (existingProf && existingProf.volumePreference)?existingProf.volumePreference:'reduced';
@@ -4948,6 +5376,9 @@ function setupApp(){
         daysPerWeek:totalDays,
         blockLength:parseInt($('setupBlockLength').value),
         programType:$('setupProgram').value,
+        athleteMode: ($('setupAthleteMode') ? $('setupAthleteMode').value : 'recreational'),
+        transitionWeeks: ($('setupTransitionWeeks') ? parseInt($('setupTransitionWeeks').value,10) : 0),
+        transitionProfile: ($('setupTransitionProfile') ? $('setupTransitionProfile').value : 'standard'),
         mainLiftingDays:normalizedMainDays,
         accessoryDays:normalizedAccessoryDays,
         sessionDuration:sessionDuration,
@@ -4958,11 +5389,30 @@ function setupApp(){
         cleanJerk,
         frontSquat,
         backSquat,
+        // Athlete profile (optional, defaults handled in normalizeProfile)
+        age: ($('setupAge') ? ( $('setupAge').value==='' ? null : parseInt($('setupAge').value,10) ) : null),
+        trainingAgeYears: ($('setupTrainingAge') ? ( $('setupTrainingAge').value==='' ? 1 : parseFloat($('setupTrainingAge').value) ) : 1),
+        recoveryCapacity: ($('setupRecovery') ? parseInt($('setupRecovery').value,10) : 3),
+        macroPeriod: ($('setupMacroPeriod') ? $('setupMacroPeriod').value : 'PP'),
+        taperStyle: ($('setupTaperStyle') ? $('setupTaperStyle').value : 'default'),
+        heavySingleExposure: ($('setupHeavySingleExposure') ? !!$('setupHeavySingleExposure').checked : false),
+        injuries: {
+          shoulder: ($('injShoulder') ? !!$('injShoulder').checked : false),
+          wrist: ($('injWrist') ? !!$('injWrist').checked : false),
+          elbow: ($('injElbow') ? !!$('injElbow').checked : false),
+          back: ($('injBack') ? !!$('injBack').checked : false),
+          hip: ($('injHip') ? !!$('injHip').checked : false),
+          knee: ($('injKnee') ? !!$('injKnee').checked : false),
+          ankle: ($('injAnkle') ? !!$('injAnkle').checked : false)
+        },
         createdAt:new Date().toISOString()
       };
       
-      setStorage(SK.profile,profile);
-      generateTrainingBlock(profile);
+      const normalizedProfile=normalizeProfile(profile);
+      setStorage(SK.profile,normalizedProfile);
+      generateTrainingBlock(normalizedProfile);
+        // NEW: consume pending transition suggestion
+        removeStorage(SK.pendingTransition);
       toast('🚀 Block generated!');
       setTimeout(()=>navigateToPage('Week'),800);
     }catch(err){
@@ -4975,6 +5425,9 @@ function setupApp(){
     $('setupUnits').value='kg';
     $('setupBlockLength').value='8';
     $('setupProgram').value='general';
+    if($('setupAthleteMode')) $('setupAthleteMode').value='recreational';
+    if($('setupTransitionWeeks')) $('setupTransitionWeeks').value='1';
+    if($('setupTransitionProfile')) $('setupTransitionProfile').value='standard';
     $('setupDuration').value='75';
     if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked=true;
     $('setupSnatch').value='80';
@@ -5125,6 +5578,25 @@ function setupApp(){
       const sessions=getStorage(SK.sessions,[]);
       const sets=getStorage(SK.sets,[]);
       
+      // NEW: if starting a new block mid-cycle, store a transition (ramp-in) suggestion
+      const priorBlock=getStorage(SK.block);
+      const deload=checkDeloadNeed();
+      let endedEarly=false;
+      try{
+        if(priorBlock && priorBlock.blockLength){
+          const curW=parseInt(priorBlock.currentWeek||1,10)||1;
+          endedEarly = curW>1 && curW<=parseInt(priorBlock.blockLength||curW,10);
+        }
+      }catch(e){}
+      const recommendedWeeks = (endedEarly || (deload && deload.needsDeload)) ? 2 : 1;
+      setStorage(SK.pendingTransition, {
+        createdAt:new Date().toISOString(),
+        fromBlockId: priorBlock ? priorBlock.id : null,
+        endedEarly: endedEarly,
+        currentWeek: priorBlock ? priorBlock.currentWeek : null,
+        deloadCheck: deload || null,
+        recommendedWeeks: recommendedWeeks
+      });
       // Save current block to history if it exists
       if(block && sessions.length>0){
         // Create archived block record
@@ -5268,27 +5740,11 @@ window.handleSetInput=handleSetInput;
 window.handleStatusClick=handleStatusClick;
 window.openExecutionMode=openExecutionMode;
 window.completeSessionQuick=completeSessionQuick;
-
-// Delegate info-button clicks (covers dynamically-rendered ⓘ icons too)
-document.addEventListener('click', (e) => {
-  const t = e.target;
-  if (!t) return;
-  const infoEl = t.closest && (t.closest('[data-info]') || t.closest('.info-btn'));
-  if (!infoEl) return;
-  const key = infoEl.getAttribute('data-info') || infoEl.dataset.info || infoEl.getAttribute('data-key');
-  if (key && typeof window.showInfo === 'function') {
-    e.preventDefault();
-    e.stopPropagation();
-    window.showInfo(key);
-  }
-}, true);
-
 window.openReadinessModal=openReadinessModal;
 window.closeReadinessModal=closeReadinessModal;
 window.saveReadinessCheck=saveReadinessCheck;
 
-function __liftai_boot(){try{setupApp();}catch(e){console.error('setupApp failed',e);try{toast('⚠️ App init failed: '+(e.message||e));}catch(_){}}}
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',__liftai_boot);}else{__liftai_boot();}
-window.addEventListener('error',e=>{console.error('Error:',e);try{toast('⚠️ Error: '+(e.message||'occurred'));}catch(_){}});
+document.addEventListener('DOMContentLoaded',setupApp);
+window.addEventListener('error',e=>{console.error('Error:',e);toast('⚠️ Error occurred')});
 
 })();
