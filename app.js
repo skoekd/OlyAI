@@ -4968,28 +4968,7 @@ function viewArchivedBlock(blockId){
         </div>
       </div>
       
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Maxes at Time of Archive</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px">
-          <div>
-            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">SNATCH</div>
-            <div style="font-size:16px;font-weight:700">${block.maxes.snatch}${block.maxes.units}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">C&J</div>
-            <div style="font-size:16px;font-weight:700">${block.maxes.cleanJerk}${block.maxes.units}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">FRONT SQUAT</div>
-            <div style="font-size:16px;font-weight:700">${block.maxes.frontSquat}${block.maxes.units}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">BACK SQUAT</div>
-            <div style="font-size:16px;font-weight:700">${block.maxes.backSquat}${block.maxes.units}</div>
-          </div>
-        </div>
-      </div>
-      
+      <!-- Maxes removed from History per UI spec -->
       <div class="card">
         <div class="card-title">Completed Sessions (${block.sessions.filter(s=>s.status==='completed').length})</div>
         <div style="margin-top:12px">
@@ -5708,8 +5687,14 @@ function setupApp(){
 
   const testBtn=$('btnTestAI');
   if(testBtn){testBtn.addEventListener('click',testAiConnection);}
-    $('btnSaveSettings').addEventListener('click',saveSettings);
-  $('btnNewBlock').addEventListener('click',()=>{
+
+  const btnSaveSettings=$('btnSaveSettings');
+  if(btnSaveSettings){ btnSaveSettings.addEventListener('click',saveSettings); }
+
+  // "New Block" button was removed from Settings (generation lives in Setup).
+  // Keep this handler only if the element exists (e.g., older cached HTML).
+  const btnNewBlock=$('btnNewBlock');
+  if(btnNewBlock) btnNewBlock.addEventListener('click',()=>{
     const pidx=loadProfilesIndex();
     const pName=(pidx.profiles.find(p=>p.id===ACTIVE_PROFILE_ID)?.name)||'Default';
     if(!confirm(`Save current block to history for "${pName}" and start a new block? This will archive your current progress.`))return;
