@@ -16,7 +16,7 @@ header h1{font-size:18px;font-weight:700;background:linear-gradient(135deg,#3b82
 .header-actions{display:flex;gap:8px}
 
 /* Main */
-main{max-width:1400px;margin:0 auto;padding:16px 16px 90px}
+main{max-width:1400px;margin:0 auto;padding:16px 16px 140px}
 
 /* Buttons */
 button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 16px;font:600 13px/1.4 inherit;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
@@ -464,6 +464,61 @@ main{padding:12px 12px 24px}
 .info-btn:hover{border-color:rgba(56,189,248,0.6);color:var(--text)}
 .info-btn:active{transform:translateY(1px)}
 
+
+/* Bottom navigation */
+.bottom-nav{
+  position:fixed;left:0;right:0;bottom:0;
+  display:flex;gap:8px;justify-content:space-around;align-items:center;
+  padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(8,10,18,0.92);
+  backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);
+  z-index:60;
+}
+.nav-btn{
+  flex:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;
+  padding:10px 0;
+  border-radius:14px;
+  background:transparent;
+  color:var(--text-dim);
+  border:1px solid transparent;
+  font-size:11px;
+  font-weight:700;
+}
+.nav-btn span{font-size:11px;font-weight:700}
+.nav-btn.active{
+  background:linear-gradient(135deg, rgba(59,130,246,.22), rgba(139,92,246,.18));
+  color:var(--text);
+  border-color:rgba(59,130,246,.25);
+}
+
+/* Sticky setup actions */
+.setup-actions-sticky{
+  position:sticky;
+  bottom:92px; /* above bottom nav */
+  display:flex;
+  gap:12px;
+  padding:12px;
+  margin-top:18px;
+  border-radius:18px;
+  background:linear-gradient(180deg, rgba(7,10,18,0) 0%, rgba(7,10,18,.82) 35%, rgba(7,10,18,.92) 100%);
+  backdrop-filter:blur(10px);
+}
+
+/* Mobile workout table tightening */
+@media (max-width:520px){
+  .container{padding:16px 12px 140px}
+  .set-table{border-spacing:0 6px}
+  .set-row td{padding:8px 6px}
+  .set-row td:first-child,.set-row td:last-child{border-left:none;border-right:none}
+  .set-row td{border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+  .set-row td input, .set-row td select{max-width:100%}
+  .card{border-radius:18px}
+  .card-inner{padding:14px}
+}
+
 </style>
 </head>
 <body>
@@ -844,10 +899,7 @@ main{padding:12px 12px 24px}
     </div>
   </div>
 </details>
-<div class="flex" style="margin-top:24px;gap:12px">
-<button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button>
-<button id="btnDemoData" class="secondary">Demo</button>
-</div>
+<div class="setup-actions-sticky"><button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button><button id="btnDemoData" class="secondary" style="min-width:110px">Demo</button></div>
 </div>
 </section>
 
@@ -977,8 +1029,6 @@ main{padding:12px 12px 24px}
 <div class="tab-navigation">
 <button class="tab-btn active" data-tab="dashboard">🏠 Dashboard</button>
 <button class="tab-btn" data-tab="workout">🏋️ Workout</button>
-<button class="tab-btn" data-tab="history">📊 History</button>
-<button class="tab-btn" data-tab="settings">⚙️ Settings</button>
 </div>
 
 <div class="tab-content active" id="tabDashboard">
@@ -1022,7 +1072,12 @@ main{padding:12px 12px 24px}
 </div>
 </div>
 
-<div class="tab-content" id="tabHistory">
+
+
+
+</section>
+
+<section id="pageHistory" class="page hidden">
 <div class="card">
 <div class="flex-between" style="margin-bottom:16px">
 <div><div class="card-title">Training History</div><div class="card-subtitle">Completed sessions</div></div>
@@ -1030,9 +1085,9 @@ main{padding:12px 12px 24px}
 </div>
 <div id="historyList"></div>
 </div>
-</div>
+</section>
 
-<div class="tab-content" id="tabSettings">
+<section id="pageSettings" class="page hidden">
 <div class="card">
 <div class="card-title">Profile & Settings</div>
 <div class="card-subtitle" id="settingsInfo">—</div>
@@ -1135,8 +1190,9 @@ main{padding:12px 12px 24px}
 <div class="card-title" style="margin-top:20px;margin-bottom:14px">Data Management</div>
 <div class="flex"><button id="btnResetAll" class="danger" style="flex:1">Reset All Data</button></div>
 </div>
-</div>
 </section>
+
+
 </main>
 
 <nav style="display:none">
@@ -1146,5 +1202,13 @@ main{padding:12px 12px 24px}
 </nav>
 
 <script src="app.js"></script>
+
+<nav class="bottom-nav" aria-label="Primary">
+  <button id="navSetup" class="nav-btn active" type="button">🛠️<span>Setup</span></button>
+  <button id="navWeek" class="nav-btn" type="button">🏋️<span>Workout</span></button>
+  <button id="navHistory" class="nav-btn" type="button">📊<span>History</span></button>
+  <button id="navSettings" class="nav-btn" type="button">⚙️<span>Settings</span></button>
+</nav>
+
 </body>
 </html>

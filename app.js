@@ -3293,7 +3293,7 @@ for(let i=0;i<scheme.top.length;i++){
 // UI Functions
 function showPage(pageName){
   ['Setup','Week','History','Settings'].forEach(p=>{const page=$(`page${p}`);if(page)page.classList.toggle('hidden',p!==pageName)});
-  ['navWeek','navHistory','navSettings'].forEach(id=>{const nav=$(id);if(nav)nav.classList.toggle('active',id===`nav${pageName}`)});
+  ['navSetup','navWeek','navHistory','navSettings'].forEach(id=>{const nav=$(id);if(nav)nav.classList.toggle('active',id===`nav${pageName}`)});
 }
 
 // Centralized Week-page tab activation so landing behavior stays consistent.
@@ -5772,6 +5772,7 @@ function setupApp(){
   });
   $('btnResetAll').addEventListener('click',resetAllData);
   $('modalClose').addEventListener('click',closeModal);
+  $('navSetup').addEventListener('click',()=>navigateToPage('Setup'));
   $('navWeek').addEventListener('click',()=>navigateToPage('Week'));
   $('navHistory').addEventListener('click',()=>navigateToPage('History'));
   $('navSettings').addEventListener('click',()=>navigateToPage('Settings'));
