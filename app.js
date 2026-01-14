@@ -3465,15 +3465,6 @@ function renderWeekPage(){
     $('blockSubtitle').textContent='Generate a block to get started';
     $('weekCalendar').innerHTML='<div style="text-align:center;color:var(--text-dim);padding:40px"><p style="margin-bottom:10px">No training block found.</p><p style="font-size:12px;opacity:.9">Go to the Setup tab to generate one.</p></div>';
     $('weekStats').innerHTML='';
-    
-    setTimeout(()=>{
-catch(err){
-            console.error('Generate error:',err);
-            toast('⚠️ Failed: '+err.message);
-          }
-        });
-      }
-    },0);
     return;
   }
   
@@ -5836,6 +5827,7 @@ function setupApp(){
   const navSettings=$('navSettings');
   if(navSettings) navSettings.addEventListener('click',()=>navigateToPage('Settings'));
   const goDash=$('btnGoDashboard'); if(goDash) goDash.addEventListener('click',()=>navigateToPage('Dashboard'));
+  const goWk=$('btnGoWorkout'); if(goWk) goWk.addEventListener('click',()=>navigateToPage('Workout'));
 
   $('workoutDetail').addEventListener('click',function(e){if(e.target===this){closeWorkoutDetail()}});
 
