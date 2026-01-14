@@ -3299,8 +3299,8 @@ for(let i=0;i<scheme.top.length;i++){
 
 // UI Functions
 function showPage(pageName){
-  ['Setup','Week','History','Settings'].forEach(p=>{const page=$(`page${p}`);if(page)page.classList.toggle('hidden',p!==pageName)});
-  ['navSetup','navWeek','navHistory','navSettings'].forEach(id=>{const nav=$(id);if(nav)nav.classList.toggle('active',id===`nav${pageName}`)});
+  ['Setup','Dashboard','Workout','History','Settings'].forEach(p=>{const page=$(`page${p}`);if(page)page.classList.toggle('hidden',p!==pageName)});
+  ['navSetup','navDashboard','navWorkout','navHistory','navSettings'].forEach(id=>{const nav=$(id);if(nav)nav.classList.toggle('active',id===`nav${pageName}`)});
 }
 
 // Centralized Week-page tab activation so landing behavior stays consistent.
@@ -3326,19 +3326,28 @@ function activateWeekTab(tabName){
 
 function navigateToPage(pageName){
   const prof=getStorage(SK.profile);
-  if(!prof&&pageName!=='Setup'){showPage('Setup');return}
-  showPage(pageName);
-  if(pageName==='Week'){
-    // Landing behavior: if an active block exists, take the user straight to Workout.
-    // Otherwise, keep Dashboard as the default.
-    const block=getStorage(SK.block);
-    const defaultTab=(block && hasActiveBlock(block))?'workout':'dashboard';
-    activateWeekTab(defaultTab);
+
+  // Setup is always reachable (especially if no active block yet)
+  if(pageName==='Setup'){ showPage('Setup'); return; }
+
+  // Dashboard / Workout require an active block
+  const block=getStorage(SK.block);
+  const hasBlock = block && hasActiveBlock(block);
+
+  if((pageName==='Dashboard' || pageName==='Workout') && !hasBlock){
+    showPage('Setup');
+    return;
   }
-  else if(pageName==='History')renderHistoryPage();
-  else if(pageName==='Settings')renderSettingsPage();
-  else if(pageName==='Setup')clearSetupForm();
+
+  // History can be viewed anytime (even before making a block)
+  showPage(pageName);
+
+  if(pageName==='Dashboard') renderDashboard();
+  else if(pageName==='Workout') renderWeekPage();
+  else if(pageName==='History') renderHistoryPage();
+  else if(pageName==='Settings') renderSettingsPage();
 }
+
 
 // Clear setup form for fresh start
 function clearSetupForm(){
@@ -4839,7 +4848,8 @@ function renderHistoryPage(){
     history.forEach(block=>{
       const completionRate=block.totalSessions>0?Math.round((block.completedSessions/block.totalSessions)*100):0;
       html+=`
-        <div class="card" style="margin-bottom:12px;cursor:pointer" data-block-id="${block.id}">
+        <div class="card" style="margin-bottom:12px;cursor:pointer;position:relative" data-block-id="${block.id}">
+          <button class="danger small delete-history" type="button" data-del-id="${block.id}" style="position:absolute;top:12px;right:12px">Delete</button>
           <div style="display:flex;justify-content:space-between;align-items:start">
             <div>
               <div style="font-size:15px;font-weight:700;margin-bottom:4px">${block.programType.toUpperCase()} • ${block.blockLength} weeks</div>
@@ -4891,6 +4901,22 @@ function renderHistoryPage(){
   }
   
   list.innerHTML=html;
+
+  // Delete archived block
+  list.querySelectorAll('.delete-history').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const id=btn.dataset.delId;
+      if(!id) return;
+      if(!confirm('Delete this archived block?')) return;
+      const hist=getStorage(SK.archivedBlocks,[]);
+      const next=hist.filter(b=>String(b.id)!==String(id));
+      setStorage(SK.archivedBlocks,next);
+      toast('🗑️ Deleted');
+      renderHistoryPage();
+    });
+  });
+
   
   // Add click handlers for sessions
   list.querySelectorAll('.session-card').forEach(card=>{
@@ -5270,10 +5296,14 @@ function setupApp(){
   // - If no active block: keep current setup landing
   // - If a block exists: go to Workout tab (per spec)
   if(!prof||!hasActiveBlock(block)){
+    const navSetup=$('navSetup'); if(navSetup) navSetup.style.display='';
     showPage('Setup');
   }else{
-    showPage('Week');
-    activateWeekTab('workout');
+    showPage('Workout');
+    renderWeekPage();
+    //
+    const navSetup=$('navSetup'); if(navSetup) navSetup.style.display='none';
+    
   }
   
   // FIXED: Multiple selection logic for both main and accessory days
@@ -5396,19 +5426,7 @@ function setupApp(){
       else if(targetTab==='settings')renderSettingsPage();
     });
   });
-
   // Dashboard quick actions
-  const goWorkout=$('btnGoWorkout');
-  if(goWorkout){
-    goWorkout.addEventListener('click',()=>{
-      // Switch tab to Workout
-      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-      const btn=document.querySelector('.tab-btn[data-tab="workout"]');
-      if(btn){btn.classList.add('active');}
-      tabContents.forEach(c=>c.classList.toggle('active',c.id==='tabWorkout'));
-      renderWeekPage();
-    });
-  }
   const dashReadiness=$('btnLogReadiness');
   if(dashReadiness){
     dashReadiness.addEventListener('click',()=>openReadinessModal(null));
@@ -5515,7 +5533,7 @@ function setupApp(){
         // NEW: consume pending transition suggestion
         removeStorage(SK.pendingTransition);
       toast('🚀 Block generated!');
-      setTimeout(()=>navigateToPage('Week'),800);
+      setTimeout(()=>navigateToPage('Workout'),800);
     }catch(err){
       console.error('Block generation error:',err);
       toast('⚠️ Generation failed: '+err.message);
@@ -5783,9 +5801,11 @@ function setupApp(){
   $('btnResetAll').addEventListener('click',resetAllData);
   $('modalClose').addEventListener('click',closeModal);
   $('navSetup').addEventListener('click',()=>navigateToPage('Setup'));
-  $('navWeek').addEventListener('click',()=>navigateToPage('Week'));
+  $('navDashboard').addEventListener('click',()=>navigateToPage('Dashboard'));
+  $('navWorkout').addEventListener('click',()=>navigateToPage('Workout'));
   $('navHistory').addEventListener('click',()=>navigateToPage('History'));
-  $('navSettings').addEventListener('click',()=>navigateToPage('Settings'));
+  const goDash=$('btnGoDashboard'); if(goDash) goDash.addEventListener('click',()=>navigateToPage('Dashboard'));
+
   $('workoutDetail').addEventListener('click',function(e){if(e.target===this){closeWorkoutDetail()}});
 
   // Execution mode UI wiring

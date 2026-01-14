@@ -758,6 +758,73 @@ body{ overflow-x:hidden; }
 </select>
 </div>
 </div>
+<div class="setup-section" style="margin-top:14px">
+  <div class="section-header">
+    <span class="section-number">1</span>
+    <div>
+      <div class="section-title">Program Preferences</div>
+      <div class="section-desc">Optional: streamline how the program feels day-to-day (volume, blocks, auto-regulation).</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Preference Preset</label>
+      <button class="info-btn" type="button" onclick="showInfo('preferences')">ⓘ</button>
+    </div>
+    <select id="setupPrefPreset">
+      <option value="balanced" selected>Balanced (recommended)</option>
+      <option value="recovery">Recovery-biased (lower fatigue)</option>
+      <option value="performance">Performance-biased (more intensity)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Athlete Mode</label>
+      <button class="info-btn" type="button" onclick="showInfo('athletemode')">ⓘ</button>
+    </div>
+    <select id="setupAthleteMode">
+      <option value="recreational" selected>Recreational (sustainable)</option>
+      <option value="competition">Competition (peak/taper)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Blocks / Variations</label>
+      <button class="info-btn" type="button" onclick="showInfo('blocks')">ⓘ</button>
+    </div>
+    <select id="setupIncludeBlocks">
+      <option value="yes" selected>Blocks available (include block variations)</option>
+      <option value="no">No blocks (swap to hang/alternate)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Volume Preference</label>
+      <button class="info-btn" type="button" onclick="showInfo('volume')">ⓘ</button>
+    </div>
+    <select id="setupVolumePref">
+      <option value="standard">Standard (higher volume)</option>
+      <option value="reduced" selected>Reduced (recommended for recreational)</option>
+      <option value="minimal">Minimal (low-fatigue / maintenance)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Auto-volume Regulation</label>
+      <button class="info-btn" type="button" onclick="showInfo('autocut')">ⓘ</button>
+    </div>
+    <select id="setupAutoCut">
+      <option value="yes" selected>On (suggest cutting remaining sets when technique/fatigue spikes)</option>
+      <option value="no">Off</option>
+    </select>
+  </div>
+</div>
+
 </div>
 <!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
 <!-- Athlete Details (NEW) -->
@@ -885,40 +952,14 @@ body{ overflow-x:hidden; }
 </div>
 </div>
 </div>
-<div class="form-group">
-<label>Athlete Mode</label>
-<button class="info-btn" onclick="showInfo('Athlete mode controls how aggressive the plan is. Recreational is more conservative and recovery-friendly. Competition is more specific with a clearer peak/taper.')">i</button>
-<select id="setupAthleteMode">
-<option value="recreational">Recreational (sustainable)</option>
-<option value="competition">Competition (peak/taper)</option>
-</select>
-</div>
+
 </details>
 </div>
 </div></section>
 <!-- ===== End Advanced Programming ===== -->
-<div class="form-group"><div class="label-row"><label>Equipment</label><button aria-label="Blocks equipment info" class="info-btn" onclick="showInfo('blocks')" type="button">ⓘ</button></div>
-<select id="setupIncludeBlocks">
-<option selected="" value="yes">Blocks available (include block variations)</option>
-<option value="no">No blocks (swap to hang/alternate)</option>
-</select>
-</div>
-<div class="form-group"><div class="label-row"><label>Volume Preference</label><button aria-label="Volume preference info" class="info-btn" onclick="showInfo('volume')" type="button">ⓘ</button></div>
-<select id="setupVolumePref">
-<option value="standard">Standard (higher volume)</option>
-<option selected="" value="reduced">Reduced (recommended for recreational)</option>
-<option value="minimal">Minimal (low-fatigue / maintenance)</option>
-</select>
-</div>
-<div class="form-group"><div class="label-row"><label>Auto-Volume Regulation</label><button aria-label="Auto-volume regulation info" class="info-btn" onclick="showInfo('autocut')" type="button">ⓘ</button></div>
-<div class="toggle-row">
-<span class="toggle-label">Suggest cutting remaining sets when technique/fatigue spikes</span>
-<label aria-label="Auto-volume regulation" class="switch">
-<select id="setupAutoCut"><option selected="" value="yes">On</option><option value="no">Off</option></select>
-<span class="slider"></span>
-</label>
-</div>
-</div>
+
+
+
 
 <!-- Step 2: Training Schedule -->
 <div class="setup-section">
@@ -984,12 +1025,8 @@ body{ overflow-x:hidden; }
 
 <div class="setup-actions"><div class="btn-row"><button class="primary" id="btnGenerateBlock">🚀 Generate Training Block</button><button class="secondary" id="btnDemo">Demo</button></div></div></div>
 </div>
-<!-- Week Page -->
-<section class="hidden" id="pageWeek">
-<!-- Tabs for Navigation -->
-<div class="workout-top-actions">
-<button class="secondary" id="btnScrollDashboard" onclick="document.getElementById('tabDashboard').scrollIntoView({behavior:'smooth',block:'start'});">Dashboard</button>
-</div>
+<!-- Dashboard Page -->
+<section class="hidden" id="pageDashboard">
 <div class="workout-section" id="tabDashboard">
 <div class="card">
 <div class="card-title">Overview</div>
@@ -1006,6 +1043,14 @@ body{ overflow-x:hidden; }
 <div class="stats-grid" id="dashboardMaxes" style="margin-top:14px"></div>
 </div>
 </div>
+
+</section>
+<!-- Workout Page -->
+<section class="hidden" id="pageWorkout">
+<div class="workout-top-actions">
+<button class="secondary" id="btnGoDashboard" type="button">Dashboard</button>
+</div>
+
 <div class="workout-section" id="tabWorkout">
 <div class="card">
 <div class="week-header">
@@ -1027,7 +1072,9 @@ body{ overflow-x:hidden; }
 <div class="calendar-grid" id="weekCalendar"></div>
 </div>
 </div>
+
 </section>
+
 <section class="page hidden" id="pageHistory">
 <div class="card">
 <div class="flex-between" style="margin-bottom:16px">
@@ -1128,17 +1175,12 @@ body{ overflow-x:hidden; }
 </div>
 </section>
 </main>
-<nav style="display:none">
-<button class="nav-item active" id="navWeek"><div class="nav-icon">📅</div>Week</button>
-<button class="nav-item" id="navHistory"><div class="nav-icon">📊</div>History</button>
-<button class="nav-item" id="navSettings"><div class="nav-icon">⚙️</div>Settings</button>
-</nav>
-<script src="app.js?v=122"></script>
+<script src="app.js?v=126"></script>
 <nav aria-label="Primary" class="bottom-nav">
 <button class="nav-btn active" id="navSetup" type="button">🛠️<span>Setup</span></button>
-<button class="nav-btn" id="navWeek" type="button">🏋️<span>Workout</span></button>
+<button class="nav-btn" id="navDashboard" type="button">🏠<span>Dashboard</span></button>
+<button class="nav-btn" id="navWorkout" type="button">🏋️<span>Workout</span></button>
 <button class="nav-btn" id="navHistory" type="button">📊<span>History</span></button>
-<button class="nav-btn" id="navSettings" type="button">⚙️<span>Settings</span></button>
 </nav>
 </body>
 </html>
