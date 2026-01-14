@@ -314,7 +314,14 @@ const $=id=>document.getElementById(id);
 function uuid(){return'id_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
 function toast(msg){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function showModal(title,sub,content){$('modalTitle').textContent=title;$('modalSubtitle').textContent=sub||'';$('modalContent').innerHTML=content||'';$('modalOverlay').classList.add('show')}
-function closeModal(){$('modalOverlay').classList.remove('show')}
+// Close the generic modal overlay safely (iOS Safari can be finicky with event timing)
+function closeModal(){
+  try{
+    $('modalOverlay')?.classList.remove('show');
+  }catch(err){
+    console.error('closeModal error:',err);
+  }
+}
 
 // Setup info helper popups (used by ⓘ buttons on Setup page)
 window.showInfo=function(key){
@@ -5515,7 +5522,10 @@ function setupApp(){
     }
   });
   
-  $('btnDemoData').addEventListener('click',()=>{
+  // Demo button: populate a sensible example profile so users can explore without setup friction.
+  // Support both legacy and current button ids.
+  const demoBtn = $('btnDemo') || $('btnDemoData');
+  demoBtn?.addEventListener('click',()=>{
     $('setupUnits').value='kg';
     $('setupBlockLength').value='8';
     $('setupProgram').value='general';
