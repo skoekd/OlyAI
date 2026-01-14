@@ -519,6 +519,22 @@ main{padding:12px 12px 24px}
   .card-inner{padding:14px}
 }
 
+
+/* v12.1 UI cleanup */
+.workout-section{display:block;margin-top:12px;}
+.workout-top-actions{display:flex;justify-content:flex-end;gap:8px;margin:8px 0 4px;}
+/* Prevent accidental horizontal scroll on iOS */
+html, body {overflow-x:hidden;}
+/* Reduce nested border feel in workout cards */
+.exercise-card, .block-card, .day-card {border:1px solid rgba(255,255,255,0.06);}
+.exercise-card .inner, .set-table, .set-row {border-color: rgba(255,255,255,0.06);}
+
+/* Safety: prevent accidental horizontal scroll on iOS */
+html, body { overflow-x: hidden; }
+
+/* If any old mid-page dashboard/workout segmented control exists, hide it */
+.workout-subtabs, .segmented-nav, .mid-tabs, .workout-mid-tabs { display:none !important; }
+
 </style>
 </head>
 <body>
@@ -531,13 +547,7 @@ main{padding:12px 12px 24px}
 </div>
 </header>
 <div class="card" style="margin: 12px auto; max-width: 1100px; border: 2px solid #111;">
-  <div style="padding: 12px 14px;">
-    <div style="font-weight: 800; font-size: 16px;">Running v10 (GitHub-ready) — Advanced Programming Enabled</div>
-    <div style="margin-top:6px; line-height:1.35;">
-      If you don't see the <b>Athlete Details</b> card below, you're opening the wrong file or a cached page.
-      Open <b>index.html</b> and hard-refresh.
-    </div>
-  </div>
+  
 </div>
 
 
@@ -898,6 +908,15 @@ main{padding:12px 12px 24px}
       </div>
     </div>
   </div>
+
+    <div class="form-group">
+      <label>Athlete Mode</label>
+      <button class="info-btn" onclick="showInfo('Athlete mode controls how aggressive the plan is. Recreational is more conservative and recovery-friendly. Competition is more specific with a clearer peak/taper.')">i</button>
+      <select id="setupAthleteMode">
+        <option value="recreational">Recreational (sustainable)</option>
+        <option value="competition">Competition (peak/taper)</option>
+      </select>
+    </div>
 </details>
 <div class="setup-actions-sticky"><button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button><button id="btnDemoData" class="secondary" style="min-width:110px">Demo</button></div>
 </div>
@@ -909,12 +928,7 @@ main{padding:12px 12px 24px}
 
 
 
-<div class="form-group"><div class="label-row"><label>Athlete Mode</label><button class="info-btn" onclick="showInfo('mode')" aria-label="Athlete mode info">ⓘ</button></div>
-  <select id="setupAthleteMode">
-    <option value="recreational">Recreational (sustainable)</option>
-    <option value="competition">Competition (peak/taper)</option>
-  </select>
-</div>
+<div class="form-group"><div class="label-row">
 
 <div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button class="info-btn" onclick="showInfo('transition')" aria-label="Ramp-in info">ⓘ</button></div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1026,12 +1040,11 @@ main{padding:12px 12px 24px}
 <!-- Week Page -->
 <section id="pageWeek" class="hidden">
 <!-- Tabs for Navigation -->
-<div class="tab-navigation">
-<button class="tab-btn active" data-tab="dashboard">🏠 Dashboard</button>
-<button class="tab-btn" data-tab="workout">🏋️ Workout</button>
-</div>
 
-<div class="tab-content active" id="tabDashboard">
+<div class="workout-top-actions">
+  <button class="secondary" id="btnScrollDashboard" onclick="document.getElementById('tabDashboard').scrollIntoView({behavior:'smooth',block:'start'});">Dashboard</button>
+</div>
+<div class="workout-section" id="tabDashboard">
 <div class="card">
   <div class="card-title">Overview</div>
   <div class="card-subtitle" id="dashboardSubtitle">—</div>
@@ -1049,7 +1062,7 @@ main{padding:12px 12px 24px}
 </div>
 </div>
 
-<div class="tab-content" id="tabWorkout">
+<div class="workout-section" id="tabWorkout">
 <div class="card">
 <div class="week-header">
 <div>
@@ -1201,7 +1214,7 @@ main{padding:12px 12px 24px}
 <button class="nav-item" id="navSettings"><div class="nav-icon">⚙️</div>Settings</button>
 </nav>
 
-<script src="app.js"></script>
+<script src="app.js?v=122"></script>
 
 <nav class="bottom-nav" aria-label="Primary">
   <button id="navSetup" class="nav-btn active" type="button">🛠️<span>Setup</span></button>
