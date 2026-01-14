@@ -1047,10 +1047,6 @@ body{ overflow-x:hidden; }
 </section>
 <!-- Workout Page -->
 <section class="hidden" id="pageWorkout">
-<div class="workout-top-actions">
-<button class="secondary" id="btnGoDashboard" type="button">Dashboard</button>
-</div>
-
 <div class="workout-section" id="tabWorkout">
 <div class="card">
 <div class="week-header">
@@ -1188,12 +1184,7 @@ body{ overflow-x:hidden; }
   </div>
 </div>
 
-<div class="form-row">
-<div class="form-group"><label>Snatch 1RM</label><input id="settingsSnatch" step="0.5" type="number"/></div>
-<div class="form-group"><label>Clean &amp; Jerk 1RM</label><input id="settingsCJ" step="0.5" type="number"/></div>
-<div class="form-group"><label>Front Squat 1RM</label><input id="settingsFS" step="0.5" type="number"/></div>
-<div class="form-group"><label>Back Squat 1RM</label><input id="settingsBS" step="0.5" type="number"/></div>
-</div>
+<div class="stats-grid" id="settingsMaxesGrid" style="margin-top:14px"></div>
 <div class="flex" style="margin-top:20px"><button class="success" id="btnSaveSettings" style="flex:1">Save Changes</button><button class="secondary" id="btnNewBlock">New Block</button></div>
 <div class="card-title" style="margin-top:20px;margin-bottom:14px">Data Management</div>
 <div class="flex"><button class="danger" id="btnResetAll" style="flex:1">Reset All Data</button></div>

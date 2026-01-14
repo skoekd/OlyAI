@@ -5165,10 +5165,18 @@ function renderSettingsPage(){
   if($('settingsAIModel')) $('settingsAIModel').value = (prof.aiModel || '');
   setAiTestStatus('','');
   updateAiAvailabilityUI();
-  $('settingsSnatch').value=prof.snatch;
-  $('settingsCJ').value=prof.cleanJerk;
-  $('settingsFS').value=prof.frontSquat;
-  $('settingsBS').value=prof.backSquat;
+
+  // Read-only max display (single source of truth is the quick updater)
+  const grid=$('settingsMaxesGrid');
+  if(grid){
+    const u=prof.units||'kg';
+    grid.innerHTML=`
+      <div class="stat-box"><div class="stat-label">Snatch</div><div class="stat-value">${prof.snatch||'—'}</div><div class="muted" style="margin-top:6px">${u}</div></div>
+      <div class="stat-box"><div class="stat-label">Clean &amp; Jerk</div><div class="stat-value">${prof.cleanJerk||'—'}</div><div class="muted" style="margin-top:6px">${u}</div></div>
+      <div class="stat-box"><div class="stat-label">Front Squat</div><div class="stat-value">${prof.frontSquat||'—'}</div><div class="muted" style="margin-top:6px">${u}</div></div>
+      <div class="stat-box"><div class="stat-label">Back Squat</div><div class="stat-value">${prof.backSquat||'—'}</div><div class="muted" style="margin-top:6px">${u}</div></div>
+    `;
+  }
 }
 
 function saveSettings(){
@@ -5176,35 +5184,13 @@ function saveSettings(){
     const prof=getStorage(SK.profile);
     if(!prof)return;
     
-    const oldMaxes={
-      snatch:prof.snatch,
+    const oldState={
       includeBlocks: (prof.includeBlocks !== false),
-      cleanJerk:prof.cleanJerk,
-      frontSquat:prof.frontSquat,
-      backSquat:prof.backSquat,
-      units:prof.units
+      units: prof.units
     };
     
     prof.units=$('settingsUnits').value;
-    const newSnatch=parseFloat($('settingsSnatch').value);
-    const newCJ=parseFloat($('settingsCJ').value);
-    const newFS=parseFloat($('settingsFS').value);
-    const newBS=parseFloat($('settingsBS').value);
     const newIncludeBlocks = ($('settingsIncludeBlocks') ? !!$('settingsIncludeBlocks').checked : (prof.includeBlocks !== false));
-    
-    if(isNaN(newSnatch)||isNaN(newCJ)||isNaN(newFS)||isNaN(newBS)){
-      toast('⚠️ Invalid max values');
-      return;
-    }
-    if(newSnatch<=0||newCJ<=0||newFS<=0||newBS<=0){
-      toast('⚠️ All maxes must be positive');
-      return;
-    }
-    
-    prof.snatch=newSnatch;
-    prof.cleanJerk=newCJ;
-    prof.frontSquat=newFS;
-    prof.backSquat=newBS;
     prof.includeBlocks=newIncludeBlocks;
 
     // New preferences
@@ -5214,14 +5200,8 @@ function saveSettings(){
     if($('settingsAIModel')) prof.aiModel = String($('settingsAIModel').value||'').trim();
 
 
-    const includeBlocksChanged = oldMaxes.includeBlocks !== (prof.includeBlocks !== false);
-    
-    const maxesChanged=
-      oldMaxes.snatch!==prof.snatch||
-      oldMaxes.cleanJerk!==prof.cleanJerk||
-      oldMaxes.frontSquat!==prof.frontSquat||
-      oldMaxes.backSquat!==prof.backSquat||
-      oldMaxes.units!==prof.units;
+    const includeBlocksChanged = oldState.includeBlocks !== (prof.includeBlocks !== false);
+    const unitsChanged = oldState.units !== prof.units;
     
     const saveSuccess=setStorage(SK.profile,prof);
     updateAiAvailabilityUI();
@@ -5232,10 +5212,6 @@ function saveSettings(){
     
     const block=getStorage(SK.block);
     if(block){
-      block.snatch=prof.snatch;
-      block.cleanJerk=prof.cleanJerk;
-      block.frontSquat=prof.frontSquat;
-      block.backSquat=prof.backSquat;
       block.units=prof.units;
       setStorage(SK.block,block);
     }
@@ -5247,16 +5223,13 @@ function saveSettings(){
       }
     }
     
-    if(maxesChanged&&block){
+    // Recalculate only when units change (maxes are updated via the single-max tool)
+    if(unitsChanged && block){
       toast('⏳ Recalculating workout weights...');
       setTimeout(()=>{
         try{
           const result=recalculateProgrammingForNewMaxes(prof,{syncUncommittedLogs:true});
-          if(result.updated>0||result.updatedLogs>0){
-            toast(`✅ Updated ${result.updated} sets using new maxes`);
-          }else{
-            toast('✅ Settings saved!');
-          }
+          toast(`✅ Updated ${result.updated||0} sets`);
           renderSettingsPage();
           renderDashboard();
           renderWeekPage();
@@ -5265,13 +5238,16 @@ function saveSettings(){
         }catch(err){
           console.error('Recalc error:',err);
           toast('⚠️ Settings saved but recalc failed');
+          renderSettingsPage();
+          renderDashboard();
         }
       },100);
-    }else{
-      toast('✅ Settings saved!');
-      renderSettingsPage();
-      renderDashboard();
+      return;
     }
+
+    toast('✅ Settings saved!');
+    renderSettingsPage();
+    renderDashboard();
   }catch(err){
     console.error('Save settings error:',err);
     toast('⚠️ Failed to save: '+err.message);
@@ -5293,12 +5269,6 @@ function applySingleMaxUpdate(){
     else if(lift==='backSquat') prof.backSquat=raw;
 
     setStorage(SK.profile,prof);
-
-    // Mirror to settings inputs (so full Save stays consistent)
-    if($('settingsSnatch')) $('settingsSnatch').value = prof.snatch;
-    if($('settingsCJ')) $('settingsCJ').value = prof.cleanJerk;
-    if($('settingsFS')) $('settingsFS').value = prof.frontSquat;
-    if($('settingsBS')) $('settingsBS').value = prof.backSquat;
 
     // Update active block & recalc % loads
     const block=getStorage(SK.block);
@@ -5674,7 +5644,8 @@ function setupApp(){
     });
   }
   updateAiAvailabilityUI();
-  $('btnSettings').addEventListener('click',()=>navigateToPage('Settings'));
+  const topSettings=$('btnSettings');
+  if(topSettings) topSettings.addEventListener('click',()=>navigateToPage('Settings'));
   // Profile controls (local only)
   const profSel=$('settingsProfileSelect');
   if(profSel){
