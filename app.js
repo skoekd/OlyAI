@@ -3350,7 +3350,9 @@ function navigateToPage(pageName){
   const hasBlock = block && hasActiveBlock(block);
 
   if((pageName==='Dashboard' || pageName==='Workout') && !hasBlock){
-    showPage('Setup');
+    showPage(pageName);
+    if(pageName==='Dashboard') renderDashboard();
+    else renderWeekPage();
     return;
   }
 
@@ -3786,10 +3788,7 @@ function renderDashboard(){
       const sub=$('dashboardSubtitle');
       if(sub)sub.textContent='Complete setup to see your dashboard';
       const stats=$('dashboardStats');
-      if(stats)stats.innerHTML='';
-      const maxes=$('dashboardMaxes');
-      if(maxes)maxes.innerHTML='';
-      return;
+      if(stats)stats.innerHTML='';      return;
     }
 
     const units=prof.units||'kg';
@@ -3822,37 +3821,6 @@ function renderDashboard(){
           <div class="stat-box"><div class="stat-value">${done}/${total}</div><div class="stat-label">Sessions</div></div>`;
       }
     }
-
-    if($('dashboardMaxes')){
-      $('dashboardMaxes').innerHTML=`
-        <div class="stat-box">
-          <div class="stat-label">Snatch</div>
-          <input id="dashMaxSnatch" type="number" inputmode="decimal" step="0.5" placeholder="—" value="${prof.snatch||''}" style="margin-top:8px"/>
-          <div class="muted" style="margin-top:6px">${units}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Clean &amp; Jerk</div>
-          <input id="dashMaxCJ" type="number" inputmode="decimal" step="0.5" placeholder="—" value="${prof.cleanJerk||''}" style="margin-top:8px"/>
-          <div class="muted" style="margin-top:6px">${units}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Front Squat</div>
-          <input id="dashMaxFS" type="number" inputmode="decimal" step="0.5" placeholder="—" value="${prof.frontSquat||''}" style="margin-top:8px"/>
-          <div class="muted" style="margin-top:6px">${units}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Back Squat</div>
-          <input id="dashMaxBS" type="number" inputmode="decimal" step="0.5" placeholder="—" value="${prof.backSquat||''}" style="margin-top:8px"/>
-          <div class="muted" style="margin-top:6px">${units}</div>
-        </div>
-        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-          <button class="primary" id="btnSaveDashMaxes">💾 Save Maxes</button>
-        </div>`;
-
-      const saveBtn=$('btnSaveDashMaxes');
-      if(saveBtn){
-        saveBtn.onclick=()=>saveDashboardMaxesFromDashboard();
-      }
     }
   }catch(err){
     console.error('Render dashboard error:',err);
@@ -3861,59 +3829,7 @@ function renderDashboard(){
 
 
 // Save maxes directly from dashboard and recalculate future programming weights
-function saveDashboardMaxesFromDashboard(){
-  try{
-    const prof=getStorage(SK.profile);
-    if(!prof){toast('⚠️ No profile found');return;}
 
-    const readNum=(id,fallback)=>{
-      const el=$(id);
-      if(!el)return fallback;
-      const v=parseFloat(String(el.value||'').trim());
-      return Number.isFinite(v)&&v>0?v:fallback;
-    };
-
-    const updated={
-      ...prof,
-      snatch:readNum('dashMaxSnatch',prof.snatch||0),
-      cleanJerk:readNum('dashMaxCJ',prof.cleanJerk||0),
-      frontSquat:readNum('dashMaxFS',prof.frontSquat||0),
-      backSquat:readNum('dashMaxBS',prof.backSquat||0)
-    };
-
-    const ok=setStorage(SK.profile,updated);
-    if(!ok)throw new Error('Failed to save profile');
-
-    // Keep block in sync (some parts of UI and older logic read maxes from block)
-    const blk=getStorage(SK.block);
-    if(blk){
-      blk.snatch=updated.snatch;
-      blk.cleanJerk=updated.cleanJerk;
-      blk.frontSquat=updated.frontSquat;
-      blk.backSquat=updated.backSquat;
-      blk.units=updated.units||blk.units;
-      setStorage(SK.block,blk);
-    }
-
-    // Recalculate programming (including the current day) and sync any uncommitted logs
-    const recalc=recalculateProgrammingForNewMaxes(updated,{syncUncommittedLogs:true});
-    if(recalc&&(recalc.updated>0||recalc.updatedLogs>0)){
-      toast(`✅ Maxes saved • Updated ${recalc.updated} sets`);
-    }else toast('✅ Maxes saved');
-
-    renderDashboard();
-    // If the user is on the Workout tab, weights should update visually
-    renderWeekPage();
-    // If execution overlay is open, refresh current set display
-    const overlay=$('execOverlay');
-    if(overlay&&overlay.classList.contains('show')){
-      renderExecutionSet();
-    }
-  }catch(err){
-    console.error('Save dashboard maxes error:',err);
-    toast('⚠️ '+err.message);
-  }
-}
 // Workout Detail (modal fallback) - keeping for compatibility
 function openWorkoutDetail(sessionId){
   const block=getStorage(SK.block);
@@ -5643,10 +5559,7 @@ function setupApp(){
       catch(err){console.error('AI UI error:',err);toast('⚠️ AI unavailable');}
     });
   }
-  updateAiAvailabilityUI();
-  const topSettings=$('btnSettings');
-  if(topSettings) topSettings.addEventListener('click',()=>navigateToPage('Settings'));
-  // Profile controls (local only)
+  updateAiAvailabilityUI();  // Profile controls (local only)
   const profSel=$('settingsProfileSelect');
   if(profSel){
     profSel.addEventListener('change', (e)=>{
