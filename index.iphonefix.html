@@ -710,101 +710,140 @@ main{padding:12px 12px 24px}
 
 <!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
 <!-- Athlete Details (NEW) -->
-<div class="card" style="margin-top:16px">
-  <div class="label-row" style="justify-content:space-between;align-items:center">
-    <label>Athlete Details</label>
-    <button class="info-btn" type="button" onclick="showInfo('athletedetails')" aria-label="Athlete details info">ⓘ</button>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Age (optional)</label>
-      <input type="number" id="setupAge" min="10" max="99" step="1" placeholder="e.g., 32">
+<details class="card" style="margin-top:16px" open>
+  <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <span style="font-weight:700">Athlete Details (optional)</span>
+    <span style="opacity:.75;font-size:12px">Tap to expand/collapse</span>
+  </summary>
+
+  <div style="margin-top:12px">
+    <div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-weight:600">Basics</div>
+      <button class="info-btn" type="button" onclick="showInfo('athletedetails')" aria-label="Athlete details info">ⓘ</button>
     </div>
-    <div class="form-group">
-      <label>Training Age (years)</label>
-      <input type="number" id="setupTrainingAge" min="0" max="60" step="0.5" placeholder="e.g., 1.5" value="1">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Age</label>
+        <input type="number" id="setupAge" min="10" max="99" step="1" placeholder="Optional (e.g., 32)">
+      </div>
+      <div class="form-group">
+        <div class="label-row"><label>Training Age</label><button class="info-btn" type="button" onclick="showInfo('trainingage')" aria-label="Training age info">ⓘ</button></div>
+        <select id="setupTrainingAge">
+          <option value="0.5">0–1 year</option>
+          <option value="1" selected>1–2 years</option>
+          <option value="3">3–5 years</option>
+          <option value="6">6+ years</option>
+        </select>
+      </div>
     </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Recovery Capacity</label>
-      <select id="setupRecovery">
-        <option value="1">1 - Low</option>
-        <option value="2">2</option>
-        <option value="3" selected>3 - Typical</option>
-        <option value="4">4</option>
-        <option value="5">5 - High</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Macro Period</label>
-      <select id="setupMacroPeriod">
-        <option value="GDP">GDP (General Development)</option>
-        <option value="PP" selected>PP (Preparatory)</option>
-        <option value="CC">CC (Competition)</option>
-        <option value="TP">TP (Transition)</option>
-      
-  <div class="form-row">
-    <div class="form-group">
-      <label>Competition Date (optional)</label>
-      <input type="date" id="setupCompetitionDate">
-      <div style="font-size:12px;opacity:0.8;margin-top:4px">If set, you can auto-derive macro periods and schedule control tests.</div>
-    </div>
-    <div class="form-group" style="display:flex;align-items:flex-end">
-      <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
-        <input type="checkbox" id="setupAutoMacroFromMeet">
-        Auto macro period from meet date
-      </label>
-    </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Primary Limiter (optional)</label>
-      <select id="setupLimiter">
-        <option value="balanced" selected>Balanced</option>
-        <option value="pull">Pull strength</option>
-        <option value="turnover">Turnover / speed under</option>
-        <option value="receiving">Receiving position</option>
-        <option value="overhead">Overhead / jerk stability</option>
-        <option value="squat">Squat strength</option>
-        <option value="speed">Speed / power</option>
-      </select>
-    </div>
-    <div class="form-group"></div>
-  </div>
-</select>
-    </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Taper Style</label>
-      <select id="setupTaperStyle">
-        <option value="default" selected>Default</option>
-        <option value="cwfhc">CWFHC 90/70/50 (3 sessions)</option>
-      </select>
-    </div>
-    <div class="form-group" style="display:flex;align-items:flex-end">
-      <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
-        <input type="checkbox" id="setupHeavySingleExposure">
-        Enable heavy single exposure (advanced/competition)
-      </label>
+
+    <div class="form-row">
+      <div class="form-group">
+        <div class="label-row"><label>Recovery Capacity</label><button class="info-btn" type="button" onclick="showInfo('recovery')" aria-label="Recovery info">ⓘ</button></div>
+        <select id="setupRecovery">
+          <option value="1">Low</option>
+          <option value="2">Below average</option>
+          <option value="3" selected>Typical</option>
+          <option value="4">Good</option>
+          <option value="5">High</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="label-row"><label>Primary Limiter</label><button class="info-btn" type="button" onclick="showInfo('limiter')" aria-label="Limiter info">ⓘ</button></div>
+        <select id="setupLimiter">
+          <option value="balanced" selected>Balanced</option>
+          <option value="pull">Pull strength</option>
+          <option value="turnover">Turnover / speed under</option>
+          <option value="receiving">Receiving position</option>
+          <option value="overhead">Overhead / jerk stability</option>
+          <option value="squat">Squat strength</option>
+          <option value="speed">Speed / power</option>
+        </select>
+      </div>
     </div>
   </div>
 
-  <div style="margin-top:10px">
-    <div style="font-weight:600;margin-bottom:6px">Active injury flags (optional)</div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
-      <label class="chip"><input type="checkbox" id="injShoulder"> Shoulder</label>
-      <label class="chip"><input type="checkbox" id="injWrist"> Wrist</label>
-      <label class="chip"><input type="checkbox" id="injElbow"> Elbow</label>
-      <label class="chip"><input type="checkbox" id="injBack"> Back</label>
-      <label class="chip"><input type="checkbox" id="injHip"> Hip</label>
-      <label class="chip"><input type="checkbox" id="injKnee"> Knee</label>
-      <label class="chip"><input type="checkbox" id="injAnkle"> Ankle</label>
+  <div style="margin-top:14px">
+    <div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-weight:600">Meet planning</div>
+      <button class="info-btn" type="button" onclick="showInfo('meetplanning')" aria-label="Meet planning info">ⓘ</button>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Competition Date</label>
+        <input type="date" id="setupCompetitionDate">
+      </div>
+      <div class="form-group">
+        <div class="label-row"><label>Macro Period</label><button class="info-btn" type="button" onclick="showInfo('macroperiod')" aria-label="Macro period info">ⓘ</button></div>
+        <select id="setupMacroPeriod">
+          <option value="AUTO" selected>Auto (from meet date)</option>
+          <option value="GDP">GDP (General Development)</option>
+          <option value="PP">PP (Preparatory)</option>
+          <option value="CC">CC (Competition)</option>
+          <option value="TP">TP (Transition)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <div class="label-row"><label>Taper Style</label><button class="info-btn" type="button" onclick="showInfo('taper')" aria-label="Taper info">ⓘ</button></div>
+        <select id="setupTaperStyle">
+          <option value="default" selected>Default (gentle deload)</option>
+          <option value="cwfhc">CWFHC 90/70/50 (3 sessions)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="label-row"><label>Heavy Single Exposure</label><button class="info-btn" type="button" onclick="showInfo('heavysingle')" aria-label="Heavy single info">ⓘ</button></div>
+        <select id="setupHeavySingleExposure">
+          <option value="off" selected>Off</option>
+          <option value="on">On (advanced/competition)</option>
+        </select>
+      </div>
     </div>
   </div>
-</div>
 
+  <div style="margin-top:14px">
+    <div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-weight:600">Injury (optional)</div>
+      <button class="info-btn" type="button" onclick="showInfo('injuries')" aria-label="Injuries info">ⓘ</button>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Active injury</label>
+        <select id="setupInjuryPreset">
+          <option value="none" selected>None</option>
+          <option value="shoulder">Shoulder</option>
+          <option value="wrist">Wrist</option>
+          <option value="elbow">Elbow</option>
+          <option value="back">Back</option>
+          <option value="hip">Hip</option>
+          <option value="knee">Knee</option>
+          <option value="ankle">Ankle</option>
+          <option value="multiple">Multiple (advanced)</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end">
+        <div id="injuryAdvancedHint" style="font-size:12px;opacity:.8;display:none">Select multiple below.</div>
+      </div>
+    </div>
+
+    <div id="injuryAdvancedGrid" style="display:none">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+        <label class="chip"><input type="checkbox" id="injShoulder"> Shoulder</label>
+        <label class="chip"><input type="checkbox" id="injWrist"> Wrist</label>
+        <label class="chip"><input type="checkbox" id="injElbow"> Elbow</label>
+        <label class="chip"><input type="checkbox" id="injBack"> Back</label>
+        <label class="chip"><input type="checkbox" id="injHip"> Hip</label>
+        <label class="chip"><input type="checkbox" id="injKnee"> Knee</label>
+        <label class="chip"><input type="checkbox" id="injAnkle"> Ankle</label>
+      </div>
+    </div>
+  </div>
+</details>
 <div class="flex" style="margin-top:24px;gap:12px">
 <button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button>
 <button id="btnDemoData" class="secondary">Demo</button>
@@ -840,18 +879,13 @@ main{padding:12px 12px 24px}
   </div>
 </div>
 <div class="form-group"><div class="label-row"><label>Equipment</label><button class="info-btn" type="button" onclick="showInfo('blocks')" aria-label="Blocks equipment info">ⓘ</button></div>
-  <div class="toggle-row">
-    <span class="toggle-label">Include blocks (if available)</span>
-    <label class="switch" aria-label="Include blocks">
-      <input type="checkbox" id="setupIncludeBlocks" checked>
-      <span class="slider"></span>
-    </label>
-  </div>
-  </div>
+  <select id="setupIncludeBlocks">
+    <option value="yes" selected>Blocks available (include block variations)</option>
+    <option value="no">No blocks (swap to hang/alternate)</option>
+  </select>
 </div>
 
-<div class="form-row" style="margin-top:14px">
-  <div class="form-group"><div class="label-row"><label>Volume Preference</label><button class="info-btn" type="button" onclick="showInfo('volume')" aria-label="Volume preference info">ⓘ</button></div>
+<div class="form-group"><div class="label-row"><label>Volume Preference</label><button class="info-btn" type="button" onclick="showInfo('volume')" aria-label="Volume preference info">ⓘ</button></div>
     <select id="setupVolumePref">
       <option value="standard">Standard (higher volume)</option>
       <option value="reduced" selected>Reduced (recommended for recreational)</option>
@@ -863,7 +897,7 @@ main{padding:12px 12px 24px}
     <div class="toggle-row">
       <span class="toggle-label">Suggest cutting remaining sets when technique/fatigue spikes</span>
       <label class="switch" aria-label="Auto-volume regulation">
-        <input type="checkbox" id="setupAutoCut" checked>
+        <select id="setupAutoCut"><option value="yes" selected>On</option><option value="no">Off</option></select>
         <span class="slider"></span>
       </label>
     </div>

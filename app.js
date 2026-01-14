@@ -338,7 +338,39 @@ window.showInfo=function(key){
 
     athletedetails:{
       title:'Athlete details',
-      body:'Optional inputs used to make the program more individualized and safer. Age/training age/recovery adjust weekly stress and exercise selection. Injury flags bias toward lower-impact variations. Macro period shifts general→specific emphasis. The CWFHC taper option uses 3-session 90/70/50 load reduction in the final taper week.'
+      body:'Optional inputs used to make the program more individualized and safer. Age/training age/recovery adjust weekly stress and exercise selection. Injury flags bias toward lower-impact variations. Macro period shifts general→specific emphasis.'
+    },
+    trainingage:{
+      title:'Training age',
+      body:'How long you’ve trained Olympic weightlifting consistently. Newer lifters usually tolerate higher frequency but need more technical stability; advanced lifters generate more stress per rep and often need more recovery.'
+    },
+    recovery:{
+      title:'Recovery capacity',
+      body:'A simple 1–5 slider that scales weekly stress. Low recovery reduces volume and heavy exposures; high recovery allows a bit more work (still conservative).'
+    },
+    limiter:{
+      title:'Primary limiter',
+      body:'Biases exercise selection toward what you most need (e.g., Pull selects more pull-strength/positional work; Overhead selects more jerk/overhead stability). Balanced keeps a normal mix.'
+    },
+    meetplanning:{
+      title:'Meet planning',
+      body:'If you enter a competition date, the app can auto-derive the macro period (GDP→PP→CC→taper) and schedule control test weeks (~6 and ~3 weeks out).'
+    },
+    macroperiod:{
+      title:'Macro period',
+      body:'A season-level focus: GDP = more variety + base work, PP = build strength/technique, CC = more classic-lift specificity, TP = restore/rebuild. “Auto” uses your meet date if set.'
+    },
+    taper:{
+      title:'Taper style',
+      body:'This only matters when a meet date is set and you’re in the final week. Default = a gentle deload with a bit of intensity preserved. CWFHC 90/70/50 = 3 sessions before the meet where the *overall session load/volume* is scaled to ~90%, then ~70%, then ~50% of normal—keeping speed and confidence while reducing fatigue.'
+    },
+    heavysingle:{
+      title:'Heavy single exposure',
+      body:'Adds a controlled heavy single before back-off work on main lift days (more common in competition-focused plans). Keep Off for newer lifters or when recovering from injury.'
+    },
+    injuries:{
+      title:'Injury',
+      body:'Selecting an injury biases the plan away from higher-risk variations and reduces stress where appropriate. “Multiple” reveals checkboxes if you want to specify more than one.'
     },
 
     
@@ -3325,14 +3357,39 @@ function clearSetupForm(){
     $('setupTransitionWeeks').value = String(w);
   }
   $('setupDuration').value='75';
-    if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked = (existingProf ? (existingProf.includeBlocks !== false) : true);
+    if($('setupIncludeBlocks')) $('setupIncludeBlocks').value = (existingProf && existingProf.includeBlocks===false) ? 'no' : 'yes';
     if($('setupVolumePref')) $('setupVolumePref').value = (existingProf && existingProf.volumePreference)?existingProf.volumePreference:'reduced';
-    if($('setupAutoCut')) $('setupAutoCut').checked = (existingProf ? (existingProf.autoCutEnabled !== false) : true);
+    if($('setupAutoCut')) $('setupAutoCut').value = (existingProf && existingProf.autoCutEnabled===false) ? 'no' : 'yes';
   // Pre-fill maxes from profile (reduces clicks). If missing, leave blank.
   $('setupSnatch').value=(existingProf && existingProf.snatch)?existingProf.snatch:'';
   $('setupCleanJerk').value=(existingProf && existingProf.cleanJerk)?existingProf.cleanJerk:'';
   $('setupFrontSquat').value=(existingProf && existingProf.frontSquat)?existingProf.frontSquat:'';
   $('setupBackSquat').value=(existingProf && existingProf.backSquat)?existingProf.backSquat:'';
+
+  // Athlete Details (optional) - keep UI calm but restore user's last selections
+  if($('setupAge')) $('setupAge').value = (existingProf && typeof existingProf.age==='number') ? String(existingProf.age) : '';
+  if($('setupTrainingAge')) $('setupTrainingAge').value = (existingProf && existingProf.trainingAgeYears!=null) ? String(existingProf.trainingAgeYears) : '1';
+  if($('setupRecovery')) $('setupRecovery').value = (existingProf && existingProf.recoveryCapacity!=null) ? String(existingProf.recoveryCapacity) : '3';
+  if($('setupLimiter')) $('setupLimiter').value = (existingProf && existingProf.limiter) ? existingProf.limiter : 'balanced';
+  if($('setupCompetitionDate')) $('setupCompetitionDate').value = (existingProf && existingProf.competitionDate) ? String(existingProf.competitionDate).slice(0,10) : '';
+  // Macro period: if autoMacroFromMeet is enabled, keep selector on AUTO
+  if($('setupMacroPeriod')) $('setupMacroPeriod').value = (existingProf && existingProf.autoMacroFromMeet) ? 'AUTO' : String((existingProf && existingProf.macroPeriod) ? existingProf.macroPeriod : 'PP').toUpperCase();
+  if($('setupTaperStyle')) $('setupTaperStyle').value = (existingProf && existingProf.taperStyle) ? existingProf.taperStyle : 'default';
+  if($('setupHeavySingleExposure')) $('setupHeavySingleExposure').value = (existingProf && existingProf.heavySingleExposure) ? 'on' : 'off';
+  if($('setupInjuryPreset')){
+    const inj=(existingProf && existingProf.injuries)?existingProf.injuries:{};
+    const keys=['shoulder','wrist','elbow','back','hip','knee','ankle'];
+    const active=keys.filter(k=>!!inj[k]);
+    $('setupInjuryPreset').value = (active.length===0) ? 'none' : (active.length===1 ? active[0] : 'multiple');
+    // Set checkbox grid if multiple
+    if($('injShoulder')) $('injShoulder').checked=!!inj.shoulder;
+    if($('injWrist')) $('injWrist').checked=!!inj.wrist;
+    if($('injElbow')) $('injElbow').checked=!!inj.elbow;
+    if($('injBack')) $('injBack').checked=!!inj.back;
+    if($('injHip')) $('injHip').checked=!!inj.hip;
+    if($('injKnee')) $('injKnee').checked=!!inj.knee;
+    if($('injAnkle')) $('injAnkle').checked=!!inj.ankle;
+  }
   // Clear day selections
   document.querySelectorAll('#mainDaySelector .day-btn').forEach(btn=>{
     btn.classList.remove('active');
@@ -5260,6 +5317,28 @@ function setupApp(){
       }
       
       updateDaySelectors();
+
+  // Simplified injury UI: show advanced checkbox grid only when "Multiple" is selected
+  function syncInjuryPresetUI(){
+    const presetEl=$('setupInjuryPreset');
+    const grid=$('injuryAdvancedGrid');
+    const hint=$('injuryAdvancedHint');
+    if(!presetEl||!grid||!hint) return;
+    const on = presetEl.value==='multiple';
+    grid.style.display = on ? 'block' : 'none';
+    hint.style.display = on ? 'block' : 'none';
+    if(!on){
+      // clear advanced checks so preset is the single source of truth
+      ['injShoulder','injWrist','injElbow','injBack','injHip','injKnee','injAnkle'].forEach(id=>{
+        const el=$(id); if(el) el.checked=false;
+      });
+    }
+  }
+  const injPreset=$('setupInjuryPreset');
+  if(injPreset){
+    injPreset.addEventListener('change',syncInjuryPresetUI);
+    setTimeout(syncInjuryPresetUI,0);
+  }
     });
   });
   
@@ -5382,29 +5461,44 @@ function setupApp(){
         mainLiftingDays:normalizedMainDays,
         accessoryDays:normalizedAccessoryDays,
         sessionDuration:sessionDuration,
-        includeBlocks: ($('setupIncludeBlocks') ? !!$('setupIncludeBlocks').checked : true),
+        includeBlocks: ($('setupIncludeBlocks') ? ($('setupIncludeBlocks').value!=='no') : true),
         volumePreference: ($('setupVolumePref') ? $('setupVolumePref').value : 'reduced'),
-        autoCutEnabled: ($('setupAutoCut') ? !!$('setupAutoCut').checked : true),
+        autoCutEnabled: ($('setupAutoCut') ? ($('setupAutoCut').value!=='no') : true),
         snatch,
         cleanJerk,
         frontSquat,
         backSquat,
         // Athlete profile (optional, defaults handled in normalizeProfile)
         age: ($('setupAge') ? ( $('setupAge').value==='' ? null : parseInt($('setupAge').value,10) ) : null),
-        trainingAgeYears: ($('setupTrainingAge') ? ( $('setupTrainingAge').value==='' ? 1 : parseFloat($('setupTrainingAge').value) ) : 1),
+        trainingAgeYears: ($('setupTrainingAge') ? parseFloat($('setupTrainingAge').value||'1') : 1),
         recoveryCapacity: ($('setupRecovery') ? parseInt($('setupRecovery').value,10) : 3),
-        macroPeriod: ($('setupMacroPeriod') ? $('setupMacroPeriod').value : 'PP'),
+        macroPeriod: ($('setupMacroPeriod') && $('setupMacroPeriod').value!=='AUTO') ? $('setupMacroPeriod').value : 'PP',
+        competitionDate: ($('setupCompetitionDate') ? ($('setupCompetitionDate').value || null) : null),
+        autoMacroFromMeet: ($('setupMacroPeriod') ? ($('setupMacroPeriod').value==='AUTO') : false),
+        limiter: ($('setupLimiter') ? $('setupLimiter').value : 'balanced'),
         taperStyle: ($('setupTaperStyle') ? $('setupTaperStyle').value : 'default'),
-        heavySingleExposure: ($('setupHeavySingleExposure') ? !!$('setupHeavySingleExposure').checked : false),
-        injuries: {
-          shoulder: ($('injShoulder') ? !!$('injShoulder').checked : false),
-          wrist: ($('injWrist') ? !!$('injWrist').checked : false),
-          elbow: ($('injElbow') ? !!$('injElbow').checked : false),
-          back: ($('injBack') ? !!$('injBack').checked : false),
-          hip: ($('injHip') ? !!$('injHip').checked : false),
-          knee: ($('injKnee') ? !!$('injKnee').checked : false),
-          ankle: ($('injAnkle') ? !!$('injAnkle').checked : false)
-        },
+        heavySingleExposure: ($('setupHeavySingleExposure') ? ($('setupHeavySingleExposure').value==='on') : false),
+        injuries: (function(){
+          // UI now uses a simple preset dropdown; "Multiple" reveals checkboxes.
+          const preset = $('setupInjuryPreset') ? $('setupInjuryPreset').value : 'none';
+          const base={shoulder:false,wrist:false,elbow:false,back:false,hip:false,knee:false,ankle:false};
+          if(preset && preset!=='none' && preset!=='multiple'){
+            base[preset]=true;
+            return base;
+          }
+          if(preset==='multiple'){
+            return {
+              shoulder: ($('injShoulder') ? !!$('injShoulder').checked : false),
+              wrist: ($('injWrist') ? !!$('injWrist').checked : false),
+              elbow: ($('injElbow') ? !!$('injElbow').checked : false),
+              back: ($('injBack') ? !!$('injBack').checked : false),
+              hip: ($('injHip') ? !!$('injHip').checked : false),
+              knee: ($('injKnee') ? !!$('injKnee').checked : false),
+              ankle: ($('injAnkle') ? !!$('injAnkle').checked : false)
+            };
+          }
+          return base;
+        })(),
         createdAt:new Date().toISOString()
       };
       
@@ -5429,7 +5523,7 @@ function setupApp(){
     if($('setupTransitionWeeks')) $('setupTransitionWeeks').value='1';
     if($('setupTransitionProfile')) $('setupTransitionProfile').value='standard';
     $('setupDuration').value='75';
-    if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked=true;
+    if($('setupIncludeBlocks')) $('setupIncludeBlocks').value='yes';
     $('setupSnatch').value='80';
     $('setupCleanJerk').value='100';
     $('setupFrontSquat').value='130';
@@ -5666,7 +5760,7 @@ function setupApp(){
       $('setupBlockLength').value='8';
       $('setupProgram').value='general';
       $('setupDuration').value='75';
-    if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked=true;
+    if($('setupIncludeBlocks')) $('setupIncludeBlocks').value='yes';
       
       toast('🆕 Ready for new block - enter your info');
       setTimeout(()=>navigateToPage('Setup'),800);
