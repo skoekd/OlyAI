@@ -1163,6 +1163,31 @@ body{ overflow-x:hidden; }
 <div class="card-title" style="margin:0">Current Maxes</div>
 <button aria-label="Current maxes info" class="info-btn" onclick="showInfo('maxes')" type="button">ⓘ</button>
 </div>
+
+<!-- Quick max editor (mobile friendly) -->
+<div class="card" style="margin-top:10px">
+  <div class="card-title" style="margin-bottom:6px">Update a 1RM</div>
+  <div class="card-subtitle">Choose a lift, enter the new value, and apply. This recalculates all % loads in the active block.</div>
+  <div class="form-row" style="margin-top:10px">
+    <div class="form-group" style="min-width:220px;flex:1">
+      <label>Lift</label>
+      <select id="settingsMaxLift">
+        <option value="snatch">Snatch</option>
+        <option value="cleanJerk">Clean &amp; Jerk</option>
+        <option value="frontSquat">Front Squat</option>
+        <option value="backSquat">Back Squat</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:180px;flex:1">
+      <label>New 1RM</label>
+      <input id="settingsMaxValue" step="0.5" type="number" placeholder="e.g., 100"/>
+    </div>
+  </div>
+  <div class="flex" style="margin-top:10px">
+    <button class="primary" id="btnApplyMax" style="flex:1" type="button">Apply &amp; Recalculate</button>
+  </div>
+</div>
+
 <div class="form-row">
 <div class="form-group"><label>Snatch 1RM</label><input id="settingsSnatch" step="0.5" type="number"/></div>
 <div class="form-group"><label>Clean &amp; Jerk 1RM</label><input id="settingsCJ" step="0.5" type="number"/></div>
@@ -1175,12 +1200,13 @@ body{ overflow-x:hidden; }
 </div>
 </section>
 </main>
-<script src="app.js?v=126"></script>
+<script src="app.js?v=127"></script>
 <nav aria-label="Primary" class="bottom-nav">
 <button class="nav-btn active" id="navSetup" type="button">🛠️<span>Setup</span></button>
 <button class="nav-btn" id="navDashboard" type="button">🏠<span>Dashboard</span></button>
 <button class="nav-btn" id="navWorkout" type="button">🏋️<span>Workout</span></button>
 <button class="nav-btn" id="navHistory" type="button">📊<span>History</span></button>
+<button class="nav-btn" id="navSettings" type="button">⚙️<span>Settings</span></button>
 </nav>
 </body>
 </html>

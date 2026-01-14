@@ -3299,8 +3299,23 @@ for(let i=0;i<scheme.top.length;i++){
 
 // UI Functions
 function showPage(pageName){
-  ['Setup','Dashboard','Workout','History','Settings'].forEach(p=>{const page=$(`page${p}`);if(page)page.classList.toggle('hidden',p!==pageName)});
-  ['navSetup','navDashboard','navWorkout','navHistory','navSettings'].forEach(id=>{const nav=$(id);if(nav)nav.classList.toggle('active',id===`nav${pageName}`)});
+  // Robust page switching (class + inline display). Some mobile browsers can get into
+  // odd states with cached styles; we force the state to avoid "tabs show same content".
+  ['Setup','Dashboard','Workout','History','Settings'].forEach(p=>{
+    const page=$(`page${p}`);
+    if(!page) return;
+    const isActive = (p===pageName);
+    page.classList.toggle('hidden',!isActive);
+    page.style.display = isActive ? 'block' : 'none';
+    page.setAttribute('aria-hidden', String(!isActive));
+  });
+  ['navSetup','navDashboard','navWorkout','navHistory','navSettings'].forEach(id=>{
+    const nav=$(id);
+    if(nav) nav.classList.toggle('active',id===`nav${pageName}`);
+  });
+
+  // Always snap to top when moving between main tabs.
+  try{ window.scrollTo({top:0,left:0,behavior:'instant'}); }catch{ window.scrollTo(0,0); }
 }
 
 // Centralized Week-page tab activation so landing behavior stays consistent.
@@ -5263,6 +5278,54 @@ function saveSettings(){
   }
 }
 
+// Quick single-lift max update (Settings tab)
+function applySingleMaxUpdate(){
+  try{
+    const prof=getStorage(SK.profile);
+    if(!prof){ toast('⚠️ No profile loaded'); return; }
+    const lift=String(($('settingsMaxLift')?.value)||'').trim();
+    const raw=parseFloat(($('settingsMaxValue')?.value)||'');
+    if(!lift||isNaN(raw)||raw<=0){ toast('⚠️ Enter a valid 1RM'); return; }
+
+    if(lift==='snatch') prof.snatch=raw;
+    else if(lift==='cleanJerk') prof.cleanJerk=raw;
+    else if(lift==='frontSquat') prof.frontSquat=raw;
+    else if(lift==='backSquat') prof.backSquat=raw;
+
+    setStorage(SK.profile,prof);
+
+    // Mirror to settings inputs (so full Save stays consistent)
+    if($('settingsSnatch')) $('settingsSnatch').value = prof.snatch;
+    if($('settingsCJ')) $('settingsCJ').value = prof.cleanJerk;
+    if($('settingsFS')) $('settingsFS').value = prof.frontSquat;
+    if($('settingsBS')) $('settingsBS').value = prof.backSquat;
+
+    // Update active block & recalc % loads
+    const block=getStorage(SK.block);
+    if(block){
+      block.snatch=prof.snatch;
+      block.cleanJerk=prof.cleanJerk;
+      block.frontSquat=prof.frontSquat;
+      block.backSquat=prof.backSquat;
+      setStorage(SK.block,block);
+      const result=recalculateProgrammingForNewMaxes(prof,{syncUncommittedLogs:true});
+      toast(`✅ Updated maxes • recalculated ${result.updated||0} sets`);
+    }else{
+      toast('✅ Max saved');
+    }
+
+    // Refresh UI
+    renderSettingsPage();
+    renderDashboard();
+    renderWeekPage();
+    const overlay=$('execOverlay');
+    if(overlay&&overlay.classList.contains('show'))renderExecutionSet();
+  }catch(err){
+    console.error('applySingleMaxUpdate error:',err);
+    toast('⚠️ Failed to update max');
+  }
+}
+
 function resetAllData(){
   if(!confirm('Delete ALL data? This cannot be undone!'))return;
   Object.values(SK).forEach(key=>localStorage.removeItem(key));
@@ -5688,6 +5751,8 @@ function setupApp(){
 
   const testBtn=$('btnTestAI');
   if(testBtn){testBtn.addEventListener('click',testAiConnection);}
+  const btnApplyMax=$('btnApplyMax');
+  if(btnApplyMax){ btnApplyMax.addEventListener('click',applySingleMaxUpdate); }
     $('btnSaveSettings').addEventListener('click',saveSettings);
   $('btnNewBlock').addEventListener('click',()=>{
     const pidx=loadProfilesIndex();
@@ -5804,6 +5869,8 @@ function setupApp(){
   $('navDashboard').addEventListener('click',()=>navigateToPage('Dashboard'));
   $('navWorkout').addEventListener('click',()=>navigateToPage('Workout'));
   $('navHistory').addEventListener('click',()=>navigateToPage('History'));
+  const navSettings=$('navSettings');
+  if(navSettings) navSettings.addEventListener('click',()=>navigateToPage('Settings'));
   const goDash=$('btnGoDashboard'); if(goDash) goDash.addEventListener('click',()=>navigateToPage('Dashboard'));
 
   $('workoutDetail').addEventListener('click',function(e){if(e.target===this){closeWorkoutDetail()}});
