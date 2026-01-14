@@ -460,7 +460,7 @@ main{padding:12px 12px 24px}
   display:inline-flex;align-items:center;justify-content:center;
   font-size:13px;line-height:1;
   cursor:pointer;
-}
+;position:relative;z-index:5;pointer-events:auto}
 .info-btn:hover{border-color:rgba(56,189,248,0.6);color:var(--text)}
 .info-btn:active{transform:translateY(1px)}
 
@@ -699,14 +699,14 @@ main{padding:12px 12px 24px}
 <div class="form-group"><div class="label-row"><label>Program Type</label><button class="info-btn" type="button" onclick="showInfo('programtype')" aria-label="Program type info">ⓘ</button></div><select id="setupProgram"><option value="general">General Strength & Technique</option><option value="strength">Maximum Strength</option><option value="hypertrophy">Hypertrophy</option><option value="competition">Competition Prep</option><option value="technique">Technique Development</option></select></div>
 
 
-<div class="form-group"><div class="label-row"><label>Athlete Mode</label><button class="info-btn" onclick="showInfo('mode')" aria-label="Athlete mode info">ⓘ</button></div>
+<div class="form-group"><div class="label-row"><label>Athlete Mode</label><button type="button" class="info-btn" data-info="mode" aria-label="mode info">ⓘ</button></div>
   <select id="setupAthleteMode">
     <option value="recreational">Recreational (sustainable)</option>
     <option value="competition">Competition (peak/taper)</option>
   </select>
 </div>
 
-<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button class="info-btn" onclick="showInfo('transition')" aria-label="Ramp-in info">ⓘ</button></div>
+<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button type="button" class="info-btn" data-info="transition" aria-label="transition info">ⓘ</button></div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <select id="setupTransitionWeeks" style="min-width:180px">
       <option value="0">No ramp-in (not recommended)</option>
