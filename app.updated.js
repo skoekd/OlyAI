@@ -23,7 +23,8 @@ const SK_BASE={
   aiLog:'liftai_ai_log_v1',
   ui:'liftai_ui_v1',
   savedBlocks:'liftai_saved_blocks_v2',
-  sessionReadiness:'liftai_session_readiness_v9'
+  sessionReadiness:'liftai_session_readiness_v9',
+  pendingTransition:'liftai_pending_transition_v1'
 };
 
 let ACTIVE_PROFILE_ID='default';
@@ -52,14 +53,19 @@ function refreshSK(){
     aiLog: makeProfiledKey(SK_BASE.aiLog, ACTIVE_PROFILE_ID),
     ui: makeProfiledKey(SK_BASE.ui, ACTIVE_PROFILE_ID),
     savedBlocks: makeProfiledKey(SK_BASE.savedBlocks, ACTIVE_PROFILE_ID),
-    sessionReadiness: makeProfiledKey(SK_BASE.sessionReadiness, ACTIVE_PROFILE_ID)
+    sessionReadiness: makeProfiledKey(SK_BASE.sessionReadiness, ACTIVE_PROFILE_ID),
+    pendingTransition: makeProfiledKey(SK_BASE.pendingTransition, ACTIVE_PROFILE_ID)
   };
 }
 
 function defaultProfile(){
   return {
     units:'kg',
-    snatch:0,
+    
+    athleteMode:'recreational',
+    transitionWeeks:1,
+    transitionProfile:'standard',
+snatch:0,
     cleanJerk:0,
     frontSquat:0,
     backSquat:0,
@@ -178,7 +184,16 @@ window.showInfo=function(key){
       title:'Program type',
       body:'Adjusts the emphasis of each week: General balances technique + strength, Strength pushes heavier squats/pulls, Hypertrophy adds more volume, Competition tightens specificity, Technique adds more lighter-quality reps.'
     },
-    blocks:{
+    
+    mode:{
+      title:'Athlete mode',
+      body:'Recreational prioritizes sustainable progression (more conservative intensity/volume and stronger safety rails). Competition increases specificity and supports a clearer taper/peak, with slightly higher intensity exposure but managed volume.'
+    },
+    transition:{
+      title:'Program switch ramp-in',
+      body:'If you start a new program while coming off another block, ramp-in reduces early-week intensity and volume to lower overtraining/injury risk. Week 1 is the biggest reduction, week 2 eases closer to normal.'
+    },
+blocks:{
       title:'Blocks equipment',
       body:'If you have lifting blocks, the program can include “from blocks” variations. If disabled, those are swapped for hang/alternate variations so the plan still works with minimal equipment.'
     },
@@ -2465,6 +2480,37 @@ function getDayType(dayNum, mainDays, accessoryDays) {
 }
 
 // Generate Training Block - INTELLIGENT VERSION
+
+// NEW: Transition (ramp-in) helpers for safer program switching
+function getTransitionProfileDefaults(transitionProfile){
+  const p=String(transitionProfile||'standard').toLowerCase();
+  if(p==='aggressive') return { w1:{intensity:0.96, volume:0.85}, w2:{intensity:0.98, volume:0.93} };
+  if(p==='conservative') return { w1:{intensity:0.90, volume:0.70}, w2:{intensity:0.95, volume:0.85} };
+  return { w1:{intensity:0.92, volume:0.75}, w2:{intensity:0.96, volume:0.90} }; // standard
+}
+
+function getModeAdjustedTransition(athleteMode, base){
+  const mode=String(athleteMode||'recreational').toLowerCase();
+  // Competition lifters often keep intensity exposure slightly higher but reduce volume more.
+  if(mode==='competition'){
+    return {
+      w1:{ intensity:Math.min(0.97, Math.max(0.88, base.w1.intensity+0.02)), volume:Math.max(0.60, base.w1.volume-0.05) },
+      w2:{ intensity:Math.min(0.99, Math.max(0.90, base.w2.intensity+0.01)), volume:Math.max(0.75, base.w2.volume-0.03) }
+    };
+  }
+  return base;
+}
+
+function getTransitionMultipliersForWeek(prof, week){
+  const weeks=parseInt(prof.transitionWeeks||0,10)||0;
+  if(!weeks || week>weeks) return { intensity:1.0, volume:1.0 };
+  const base=getModeAdjustedTransition(prof.athleteMode, getTransitionProfileDefaults(prof.transitionProfile));
+  if(week===1) return { intensity:base.w1.intensity, volume:base.w1.volume };
+  if(week===2) return { intensity:base.w2.intensity, volume:base.w2.volume };
+  // If user ever chooses >2 in future, just use week2 values for the remainder.
+  return { intensity:base.w2.intensity, volume:base.w2.volume };
+}
+
 function generateTrainingBlock(prof){
   const blockId=uuid();
   
@@ -2505,6 +2551,11 @@ function generateTrainingBlock(prof){
     const volumeMultMap = { standard: 1.0, reduced: 0.75, minimal: 0.60 };
     const volumePreferenceMult = volumeMultMap[volumePref] ?? 0.75;
     const adjustedVolume = phaseInfo.volume * philosophyConfig.volumeMod * volumePreferenceMult;
+    // NEW: Apply ramp-in multipliers when switching programs mid-cycle (weeks 1-2)
+    const transitionMult = getTransitionMultipliersForWeek(prof, week);
+    const rampedIntensity = Math.max(0.50, Math.min(0.98, rampedIntensity * transitionMult.intensity));
+    const rampedVolume = rampedVolume * transitionMult.volume;
+
     
     const weekInPhase=week%4||4;
     
@@ -2673,7 +2724,7 @@ function generateTrainingBlock(prof){
       }
       
       // Use adjusted intensity from philosophy
-      const mainIntensity = adjustedIntensity;
+      const mainIntensity = rampedIntensity;
       
       scheme.warmup.forEach((reps,i)=>{
         if(i<warmupInts.length){
@@ -2731,7 +2782,7 @@ for(let i=0;i<scheme.top.length;i++){
       }
       
       const backoffInt=phaseInfo.phase==='intensification'?(mainIntensity-0.08):(mainIntensity-0.10);
-      const rawBackoffCount=Math.floor(scheme.backoffSets*adjustedVolume*timeMultiplier);
+      const rawBackoffCount=Math.floor(scheme.backoffSets*rampedVolume*timeMultiplier);
       const backoffCount=Math.min(rawBackoffCount,(capBackoffSetsMap[volumePref]||rawBackoffCount));
       for(let i=0;i<backoffCount;i++){
         if(mainWorkReps + scheme.backoff > maxMainWorkReps) break;
@@ -2753,7 +2804,7 @@ for(let i=0;i<scheme.top.length;i++){
       
       setIdx=0;
       const secInt=phaseInfo.phase==='accumulation'?0.75:0.80;
-      const secSets=Math.floor(3*adjustedVolume*timeMultiplier);
+      const secSets=Math.floor(3*rampedVolume*timeMultiplier);
       const secReps=exercises.secondary.includes('Pull')?3:scheme.backoff;
       const pullMax=exercises.secondary.includes('Pull')?(secMax*PULL_MAX_MULTIPLIER):secMax;
       
@@ -2775,7 +2826,7 @@ for(let i=0;i<scheme.top.length;i++){
       
       if (prof.sessionDuration >= 60) {
         setIdx=0;
-        const sqSets=Math.floor(sqScheme.sets*adjustedVolume*timeMultiplier);
+        const sqSets=Math.floor(sqScheme.sets*rampedVolume*timeMultiplier);
         for(let i=0;i<sqSets;i++){
           sets.push({
             id:uuid(),
@@ -2891,6 +2942,19 @@ function clearSetupForm(){
   $('setupUnits').value=(existingProf && existingProf.units)?existingProf.units:'kg';
   $('setupBlockLength').value='8';
   $('setupProgram').value='general';
+
+  // NEW: Athlete mode + transition defaults
+  if($('setupAthleteMode')) $('setupAthleteMode').value = (existingProf && existingProf.athleteMode) ? existingProf.athleteMode : 'recreational';
+  if($('setupTransitionProfile')) $('setupTransitionProfile').value = (existingProf && existingProf.transitionProfile) ? existingProf.transitionProfile : 'standard';
+  // If user just started a new block while mid-program, suggest a ramp-in automatically.
+  const pending=getStorage(SK.pendingTransition,null);
+  if($('setupTransitionWeeks')){
+    let w = (existingProf && typeof existingProf.transitionWeeks!=='undefined') ? existingProf.transitionWeeks : 1;
+    if(pending && pending.recommendedWeeks!=null){
+      w = pending.recommendedWeeks;
+    }
+    $('setupTransitionWeeks').value = String(w);
+  }
   $('setupDuration').value='75';
     if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked = (existingProf ? (existingProf.includeBlocks !== false) : true);
     if($('setupVolumePref')) $('setupVolumePref').value = (existingProf && existingProf.volumePreference)?existingProf.volumePreference:'reduced';
@@ -4943,6 +5007,9 @@ function setupApp(){
         daysPerWeek:totalDays,
         blockLength:parseInt($('setupBlockLength').value),
         programType:$('setupProgram').value,
+        athleteMode: ($('setupAthleteMode') ? $('setupAthleteMode').value : 'recreational'),
+        transitionWeeks: ($('setupTransitionWeeks') ? parseInt($('setupTransitionWeeks').value,10) : 0),
+        transitionProfile: ($('setupTransitionProfile') ? $('setupTransitionProfile').value : 'standard'),
         mainLiftingDays:normalizedMainDays,
         accessoryDays:normalizedAccessoryDays,
         sessionDuration:sessionDuration,
@@ -4958,6 +5025,8 @@ function setupApp(){
       
       setStorage(SK.profile,profile);
       generateTrainingBlock(profile);
+        // NEW: consume pending transition suggestion
+        removeStorage(SK.pendingTransition);
       toast('🚀 Block generated!');
       setTimeout(()=>navigateToPage('Week'),800);
     }catch(err){
@@ -4970,6 +5039,9 @@ function setupApp(){
     $('setupUnits').value='kg';
     $('setupBlockLength').value='8';
     $('setupProgram').value='general';
+    if($('setupAthleteMode')) $('setupAthleteMode').value='recreational';
+    if($('setupTransitionWeeks')) $('setupTransitionWeeks').value='1';
+    if($('setupTransitionProfile')) $('setupTransitionProfile').value='standard';
     $('setupDuration').value='75';
     if($('setupIncludeBlocks')) $('setupIncludeBlocks').checked=true;
     $('setupSnatch').value='80';
@@ -5120,6 +5192,25 @@ function setupApp(){
       const sessions=getStorage(SK.sessions,[]);
       const sets=getStorage(SK.sets,[]);
       
+      // NEW: if starting a new block mid-cycle, store a transition (ramp-in) suggestion
+      const priorBlock=getStorage(SK.block);
+      const deload=checkDeloadNeed();
+      let endedEarly=false;
+      try{
+        if(priorBlock && priorBlock.blockLength){
+          const curW=parseInt(priorBlock.currentWeek||1,10)||1;
+          endedEarly = curW>1 && curW<=parseInt(priorBlock.blockLength||curW,10);
+        }
+      }catch(e){}
+      const recommendedWeeks = (endedEarly || (deload && deload.needsDeload)) ? 2 : 1;
+      setStorage(SK.pendingTransition, {
+        createdAt:new Date().toISOString(),
+        fromBlockId: priorBlock ? priorBlock.id : null,
+        endedEarly: endedEarly,
+        currentWeek: priorBlock ? priorBlock.currentWeek : null,
+        deloadCheck: deload || null,
+        recommendedWeeks: recommendedWeeks
+      });
       // Save current block to history if it exists
       if(block && sessions.length>0){
         // Create archived block record
