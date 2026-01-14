@@ -488,6 +488,10 @@ main{padding:12px 12px 24px}
   background:linear-gradient(180deg, rgba(7,10,18,0) 0%, rgba(7,10,18,.82) 35%, rgba(7,10,18,.92) 100%);
   backdrop-filter:blur(10px);
 }
+.setup-actions-bottom{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:14px 0 6px;}
+.setup-actions-bottom .primary{flex:1;min-width:220px;}
+.setup-actions-bottom .secondary{min-width:110px;}
+
 
 /* Mobile workout table tightening */
 @media (max-width:520px){
@@ -528,9 +532,6 @@ html, body { overflow-x: hidden; }
 <button class="icon secondary" id="btnSettings">⚙️</button>
 </div>
 </header>
-<div class="card" style="margin: 12px auto; max-width: 1100px; border: 2px solid #111;">
-  
-</div>
 
 
 <div id="toast" class="toast"></div>
@@ -755,6 +756,23 @@ html, body { overflow-x: hidden; }
 <div class="form-group"><div class="label-row"><label>Block Length</label><button class="info-btn" type="button" onclick="showInfo('blocklength')" aria-label="Block length info">ⓘ</button></div><select id="setupBlockLength"><option value="4">4 Weeks</option><option value="6">6 Weeks</option><option value="8" selected>8 Weeks</option><option value="12">12 Weeks</option></select></div>
 <div class="form-group"><div class="label-row"><label>Program Type</label><button class="info-btn" type="button" onclick="showInfo('programtype')" aria-label="Program type info">ⓘ</button></div><select id="setupProgram"><option value="general">General Strength & Technique</option><option value="strength">Maximum Strength</option><option value="hypertrophy">Hypertrophy</option><option value="competition">Competition Prep</option><option value="technique">Technique Development</option></select></div>
 
+<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button class="info-btn" onclick="showInfo('transition')" aria-label="Ramp-in info">ⓘ</button></div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select id="setupTransitionWeeks" style="min-width:180px">
+      <option value="0">No ramp-in (not recommended)</option>
+      <option value="1">Ramp-in: 1 week</option>
+      <option value="2">Ramp-in: 2 weeks</option>
+    </select>
+    <select id="setupTransitionProfile" style="min-width:180px">
+      <option value="standard">Standard</option>
+      <option value="conservative">Conservative</option>
+      <option value="aggressive">Aggressive</option>
+    </select>
+  </div>
+</div>
+
+</select></div>
+
 <!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
 <!-- Athlete Details (NEW) -->
 <details class="card" style="margin-top:16px" open>
@@ -900,7 +918,7 @@ html, body { overflow-x: hidden; }
       </select>
     </div>
 </details>
-<div class="setup-actions-sticky"><button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button><button id="btnDemoData" class="secondary" style="min-width:110px">Demo</button></div>
+
 </div>
 </section>
 
@@ -910,22 +928,6 @@ html, body { overflow-x: hidden; }
 
 
 
-<div class="form-group"><div class="label-row">
-
-<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button class="info-btn" onclick="showInfo('transition')" aria-label="Ramp-in info">ⓘ</button></div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <select id="setupTransitionWeeks" style="min-width:180px">
-      <option value="0">No ramp-in (not recommended)</option>
-      <option value="1">Ramp-in: 1 week</option>
-      <option value="2">Ramp-in: 2 weeks</option>
-    </select>
-    <select id="setupTransitionProfile" style="min-width:180px">
-      <option value="standard">Standard</option>
-      <option value="conservative">Conservative</option>
-      <option value="aggressive">Aggressive</option>
-    </select>
-  </div>
-</div>
 <div class="form-group"><div class="label-row"><label>Equipment</label><button class="info-btn" type="button" onclick="showInfo('blocks')" aria-label="Blocks equipment info">ⓘ</button></div>
   <select id="setupIncludeBlocks">
     <option value="yes" selected>Blocks available (include block variations)</option>
@@ -1016,6 +1018,11 @@ html, body { overflow-x: hidden; }
 <div class="form-group"><label>Front Squat 1RM</label><input type="number" id="setupFrontSquat" step="0.5" placeholder="130"></div>
 <div class="form-group"><label>Back Squat 1RM</label><input type="number" id="setupBackSquat" step="0.5" placeholder="150"></div>
 </div>
+<div class="setup-actions-bottom">
+  <button id="btnGenerateBlock" class="primary">🚀 Generate Training Block</button>
+  <button id="btnDemo" class="secondary">Demo</button>
+</div>
+
 </div>
 
 
