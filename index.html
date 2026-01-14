@@ -116,8 +116,8 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .exercise-progress-fill{height:100%;background:linear-gradient(90deg,var(--success),var(--primary));transition:width .3s}
 
 /* Mini Set View */
-.sets-mini{display:flex;flex-direction:column;gap:8px;overflow-x:hidden;padding-bottom:6px}
-.set-mini{display:grid;grid-template-columns:28px 64px minmax(72px,1fr) minmax(52px,.8fr) minmax(52px,.8fr) minmax(96px,1.1fr);gap:8px;align-items:center;padding:8px;background:rgba(17,24,39,.6);border-radius:6px;border:1px solid var(--border);transition:all .2s;min-width:0}
+.sets-mini{display:flex;flex-direction:column;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;padding-bottom:6px}
+.set-mini{display:grid;grid-template-columns:32px 70px 1fr 1fr 1fr 120px;gap:8px;align-items:center;padding:8px;background:rgba(17,24,39,.6);border-radius:6px;border:1px solid var(--border);transition:all .2s}
 .set-mini:hover{background:rgba(17,24,39,1);border-color:var(--primary)}
 .set-mini.status-easy{border-color:var(--success)}
 .set-mini.status-made{border-color:var(--primary)}
@@ -127,24 +127,6 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .set-mini-label-row:hover{background:transparent;border-color:transparent}
 .set-mini-label-row .col-label{font-size:11px;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 
-/* Keep column headers aligned with their inputs/buttons */
-.set-mini .col-label{display:block;text-align:center}
-.set-actions-mini{justify-content:center}
-
-/* Prevent metadata row overflow on small screens */
-.exercise-meta{flex-wrap:wrap;justify-content:flex-end}
-
-@media (max-width:520px){
-  /* iPhone (incl. Pro Max): reduce fixed widths and eliminate horizontal scroll */
-  .sets-mini{overflow-x:hidden}
-  .set-mini{grid-template-columns:26px 58px minmax(66px,1fr) minmax(48px,.8fr) minmax(48px,.8fr) minmax(86px,1fr);gap:6px;padding:7px}
-  .set-input-mini{padding:6px 6px;font-size:13px}
-  .set-input-mini.rpe{max-width:56px}
-  .status-btn-mini{width:26px;height:26px}
-  .quick-swap{max-width:140px}
-  .exercise-meta{gap:10px}
-}
-
 .set-num{font-weight:700;font-size:14px;color:var(--text-dim)}
 .set-target{font-size:12px;color:var(--text-dim)}
 
@@ -152,7 +134,7 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .set-input-mini:focus{border-color:var(--primary);outline:none}
 .set-input-mini.rpe{max-width:60px}
 
-.set-actions-mini{display:flex;justify-content:center;align-items:center;gap:6px}
+.set-actions-mini{display:flex;justify-content:flex-end;align-items:center;gap:6px}
 .set-action-select{display:none;appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;line-height:1;cursor:pointer;min-width:54px;text-align:center}
 .set-action-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(59,130,246,.25)}
 .set-action-select option{background:#020617;color:#f8fafc;font-weight:600}
@@ -460,7 +442,7 @@ main{padding:12px 12px 24px}
   display:inline-flex;align-items:center;justify-content:center;
   font-size:13px;line-height:1;
   cursor:pointer;
-;position:relative;z-index:5;pointer-events:auto}
+}
 .info-btn:hover{border-color:rgba(56,189,248,0.6);color:var(--text)}
 .info-btn:active{transform:translateY(1px)}
 
@@ -698,28 +680,6 @@ main{padding:12px 12px 24px}
 <div class="form-group"><div class="label-row"><label>Block Length</label><button class="info-btn" type="button" onclick="showInfo('blocklength')" aria-label="Block length info">ⓘ</button></div><select id="setupBlockLength"><option value="4">4 Weeks</option><option value="6">6 Weeks</option><option value="8" selected>8 Weeks</option><option value="12">12 Weeks</option></select></div>
 <div class="form-group"><div class="label-row"><label>Program Type</label><button class="info-btn" type="button" onclick="showInfo('programtype')" aria-label="Program type info">ⓘ</button></div><select id="setupProgram"><option value="general">General Strength & Technique</option><option value="strength">Maximum Strength</option><option value="hypertrophy">Hypertrophy</option><option value="competition">Competition Prep</option><option value="technique">Technique Development</option></select></div>
 
-
-<div class="form-group"><div class="label-row"><label>Athlete Mode</label><button type="button" class="info-btn" data-info="mode" aria-label="mode info">ⓘ</button></div>
-  <select id="setupAthleteMode">
-    <option value="recreational">Recreational (sustainable)</option>
-    <option value="competition">Competition (peak/taper)</option>
-  </select>
-</div>
-
-<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button type="button" class="info-btn" data-info="transition" aria-label="transition info">ⓘ</button></div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <select id="setupTransitionWeeks" style="min-width:180px">
-      <option value="0">No ramp-in (not recommended)</option>
-      <option value="1">Ramp-in: 1 week</option>
-      <option value="2">Ramp-in: 2 weeks</option>
-    </select>
-    <select id="setupTransitionProfile" style="min-width:180px">
-      <option value="standard">Standard</option>
-      <option value="conservative">Conservative</option>
-      <option value="aggressive">Aggressive</option>
-    </select>
-  </div>
-</div>
 <div class="form-group"><div class="label-row"><label>Equipment</label><button class="info-btn" type="button" onclick="showInfo('blocks')" aria-label="Blocks equipment info">ⓘ</button></div>
   <div class="toggle-row">
     <span class="toggle-label">Include blocks (if available)</span>
@@ -998,6 +958,17 @@ main{padding:12px 12px 24px}
 <button class="nav-item" id="navSettings"><div class="nav-icon">⚙️</div>Settings</button>
 </nav>
 
-<script src="app.js"></script>
+<script src="app.js" onerror="(function(){var b=document.createElement('div');b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 12px;background:#7f1d1d;color:#fff;font:600 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;border-bottom:1px solid rgba(255,255,255,.2)';b.innerHTML='JavaScript failed to load (<b>app.js</b>). Ensure <b>app.js</b> is in the same folder as <b>index.html</b> in your GitHub Pages publish source.';document.body.appendChild(b);})();"></script>
+<script>
+setTimeout(function(){
+  if(!window.__LIFTAI_LOADED__){
+    var b=document.createElement('div');
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 12px;background:#92400e;color:#fff;font:600 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;border-bottom:1px solid rgba(255,255,255,.2)';
+    b.innerHTML='app.js did not execute. If you are on GitHub Pages, confirm your site is publishing the correct folder/branch and that <b>app.js</b> is not inside a subfolder.';
+    document.body.appendChild(b);
+  }
+}, 1200);
+</script>
+
 </body>
 </html>
