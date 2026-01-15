@@ -1,22 +1,14 @@
-LiftAI — FIX for "no buttons work"
+LiftAI Programming Logic Upgrade (Option 1: keep block structure)
 
-Root cause:
-- Your index.html loads: app_sets_edit.js?v=1700
-- But your repo contains app.js (not app_sets_edit.js), so the browser fails to load JS.
-- When JS fails to load, *none* of the click handlers get attached, so every button appears dead.
+What changed:
+- New 1RMs saved in Settings recompute working maxes and regenerate weeks (structure stays the same).
+- Prescribed weights everywhere now use adjusted working max (profile.liftAdjustments) for consistency.
+- Action dropdown (make/belt/heavy/miss) continues to adjust later WORK sets in-session.
+- Manual change to the FIRST work set creates a session-level offset and updates later work sets (unless overridden).
+- Completing a day updates profile.liftAdjustments (very conservatively), so future prescriptions adapt.
 
-Fix:
-- index.html now loads app.js with a cache-busting query string: app.js?v=1768441928
-
-Deploy steps (GitHub Pages):
-1) Delete any extra files like:
-   - app.js.js, app.updated.js, app_sets_edit.js (if present)
-   - index.html.html, index.iphonefix.html (if present)
-2) Upload/replace ONLY these two files in the repo root:
-   - index.html (from this zip)
-   - app.js (from this zip)
-3) Commit
-4) On iPhone Safari: open the site in a Private tab once (or clear website data)
-
-Quick verification:
-- In the browser devtools console you should NOT see: 404 app_sets_edit.js
+Deploy:
+- Replace repo root files with index.html and app.js from this zip.
+- Commit + push.
+- If iPhone Safari caches: open in private tab once.
+Build timestamp: 1768444172
