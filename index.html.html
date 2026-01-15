@@ -1,10 +1,15 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<!-- Cache-busting helpers (GitHub Pages + mobile Safari can aggressively cache JS) -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>LiftAI v7 — Olympic Weightlifting Planner</title>
-<link rel="manifest" href="manifest.json">
+<link href="manifest.json" rel="manifest"/>
 <style>
 :root{--bg:#0a0e1a;--card:#111827;--card-hover:#1a2332;--border:#1f2937;--text:#f9fafb;--text-dim:#9ca3af;--primary:#3b82f6;--primary-dark:#2563eb;--success:#10b981;--warning:#f59e0b;--danger:#ef4444;--purple:#8b5cf6;--accent:#06b6d4}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -16,7 +21,7 @@ header h1{font-size:18px;font-weight:700;background:linear-gradient(135deg,#3b82
 .header-actions{display:flex;gap:8px}
 
 /* Main */
-main{max-width:1400px;margin:0 auto;padding:16px 16px 90px}
+main{max-width:1400px;margin:0 auto;padding:16px 16px 140px}
 
 /* Buttons */
 button{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 16px;font:600 13px/1.4 inherit;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
@@ -116,8 +121,8 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .exercise-progress-fill{height:100%;background:linear-gradient(90deg,var(--success),var(--primary));transition:width .3s}
 
 /* Mini Set View */
-.sets-mini{display:flex;flex-direction:column;gap:8px;overflow-x:hidden;padding-bottom:6px}
-.set-mini{display:grid;grid-template-columns:28px 64px minmax(72px,1fr) minmax(52px,.8fr) minmax(52px,.8fr) minmax(96px,1.1fr);gap:8px;align-items:center;padding:8px;background:rgba(17,24,39,.6);border-radius:6px;border:1px solid var(--border);transition:all .2s;min-width:0}
+.sets-mini{display:flex;flex-direction:column;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;padding-bottom:6px}
+.set-mini{display:grid;grid-template-columns:32px 70px 1fr 1fr 1fr 120px;gap:8px;align-items:center;padding:8px;background:rgba(17,24,39,.6);border-radius:6px;border:1px solid var(--border);transition:all .2s}
 .set-mini:hover{background:rgba(17,24,39,1);border-color:var(--primary)}
 .set-mini.status-easy{border-color:var(--success)}
 .set-mini.status-made{border-color:var(--primary)}
@@ -127,24 +132,6 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .set-mini-label-row:hover{background:transparent;border-color:transparent}
 .set-mini-label-row .col-label{font-size:11px;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 
-/* Keep column headers aligned with their inputs/buttons */
-.set-mini .col-label{display:block;text-align:center}
-.set-actions-mini{justify-content:center}
-
-/* Prevent metadata row overflow on small screens */
-.exercise-meta{flex-wrap:wrap;justify-content:flex-end}
-
-@media (max-width:520px){
-  /* iPhone (incl. Pro Max): reduce fixed widths and eliminate horizontal scroll */
-  .sets-mini{overflow-x:hidden}
-  .set-mini{grid-template-columns:26px 58px minmax(66px,1fr) minmax(48px,.8fr) minmax(48px,.8fr) minmax(86px,1fr);gap:6px;padding:7px}
-  .set-input-mini{padding:6px 6px;font-size:13px}
-  .set-input-mini.rpe{max-width:56px}
-  .status-btn-mini{width:26px;height:26px}
-  .quick-swap{max-width:140px}
-  .exercise-meta{gap:10px}
-}
-
 .set-num{font-weight:700;font-size:14px;color:var(--text-dim)}
 .set-target{font-size:12px;color:var(--text-dim)}
 
@@ -152,7 +139,7 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .set-input-mini:focus{border-color:var(--primary);outline:none}
 .set-input-mini.rpe{max-width:60px}
 
-.set-actions-mini{display:flex;justify-content:center;align-items:center;gap:6px}
+.set-actions-mini{display:flex;justify-content:flex-end;align-items:center;gap:6px}
 .set-action-select{display:none;appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;line-height:1;cursor:pointer;min-width:54px;text-align:center}
 .set-action-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(59,130,246,.25)}
 .set-action-select option{background:#020617;color:#f8fafc;font-weight:600}
@@ -464,44 +451,123 @@ main{padding:12px 12px 24px}
 .info-btn:hover{border-color:rgba(56,189,248,0.6);color:var(--text)}
 .info-btn:active{transform:translateY(1px)}
 
+
+/* Bottom navigation */
+.bottom-nav{
+  position:fixed;left:0;right:0;bottom:0;
+  display:flex;gap:8px;justify-content:space-around;align-items:center;
+  padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(8,10,18,0.92);
+  backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);
+  z-index:60;
+}
+.nav-btn{
+  flex:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;
+  padding:10px 0;
+  border-radius:14px;
+  background:transparent;
+  color:var(--text-dim);
+  border:1px solid transparent;
+  font-size:11px;
+  font-weight:700;
+}
+.nav-btn span{font-size:11px;font-weight:700}
+.nav-btn.active{
+  background:linear-gradient(135deg, rgba(59,130,246,.22), rgba(139,92,246,.18));
+  color:var(--text);
+  border-color:rgba(59,130,246,.25);
+}
+
+/* Sticky setup actions */
+.setup-actions-sticky{
+  position:sticky;
+  bottom:92px; /* above bottom nav */
+  display:flex;
+  gap:12px;
+  padding:12px;
+  margin-top:18px;
+  border-radius:18px;
+  background:linear-gradient(180deg, rgba(7,10,18,0) 0%, rgba(7,10,18,.82) 35%, rgba(7,10,18,.92) 100%);
+  backdrop-filter:blur(10px);
+}
+.setup-actions-bottom{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:14px 0 6px;}
+.setup-actions-bottom .primary{flex:1;min-width:220px;}
+.setup-actions-bottom .secondary{min-width:110px;}
+
+
+/* Mobile workout table tightening */
+@media (max-width:520px){
+  .container{padding:16px 12px 140px}
+  .set-table{border-spacing:0 6px}
+  .set-row td{padding:8px 6px}
+  .set-row td:first-child,.set-row td:last-child{border-left:none;border-right:none}
+  .set-row td{border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+  .set-row td input, .set-row td select{max-width:100%}
+  .card{border-radius:18px}
+  .card-inner{padding:14px}
+}
+
+
+/* v12.1 UI cleanup */
+.workout-section{display:block;margin-top:12px;}
+.workout-top-actions{display:flex;justify-content:flex-end;gap:8px;margin:8px 0 4px;}
+/* Prevent accidental horizontal scroll on iOS */
+html, body {overflow-x:hidden;}
+/* Reduce nested border feel in workout cards */
+.exercise-card, .block-card, .day-card {border:1px solid rgba(255,255,255,0.06);}
+.exercise-card .inner, .set-table, .set-row {border-color: rgba(255,255,255,0.06);}
+
+/* Safety: prevent accidental horizontal scroll on iOS */
+html, body { overflow-x: hidden; }
+
+/* If any old mid-page dashboard/workout segmented control exists, hide it */
+.workout-subtabs, .segmented-nav, .mid-tabs, .workout-mid-tabs { display:none !important; }
+
+
+
+/* v12.4 iPhone fixes */
+:root{ --tabbar-h: 86px; } /* approximate incl. safe area */
+body{ overflow-x:hidden; }
+.page-content{ padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+/* Keep the primary action buttons at the end of Setup (no overlay on the tab bar) */
+.setup-actions{ margin-top: 18px; padding-bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom)); }
+.setup-actions .btn-row{ display:flex; gap:12px; }
+.setup-actions .btn-row button{ flex:1; }
+/* No sticky behavior on mobile — avoids covering the tab bar and interfering with taps */
 </style>
 </head>
 <body>
-
 <header>
 <h1>LiftAI v7</h1>
 <div class="header-actions">
 <button class="icon secondary" id="btnAI" title="AI Programming Assistant">🤖</button>
-<button class="icon secondary" id="btnSettings">⚙️</button>
 </div>
 </header>
-
-<div id="toast" class="toast"></div>
-
+<div class="toast" id="toast"></div>
 <!-- Modal -->
-<div id="modalOverlay" class="modal-overlay">
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this){ closeModal(); }">
 <div class="modal">
 <div class="modal-title" id="modalTitle">Modal</div>
 <div class="modal-subtitle" id="modalSubtitle"></div>
 <div id="modalContent"></div>
-<button class="secondary" id="modalClose" style="width:100%;margin-top:16px">Close</button>
+<button class="secondary" id="modalClose" onclick="closeModal(); return false;" style="width:100%;margin-top:16px" type="button">Close</button>
 </div>
 </div>
-
 <!-- Readiness Check Modal -->
-<div id="readinessOverlay" class="readiness-overlay">
+<div class="readiness-overlay" id="readinessOverlay">
 <div class="readiness-modal">
 <div class="readiness-title">💪 Pre-Workout Check</div>
 <div class="readiness-subtitle">Quick readiness assessment to optimize your session</div>
-
 <div class="readiness-item">
 <div class="readiness-label">
 <span>😴 Sleep (hours)</span>
 <span class="readiness-value" id="sleepValue">7</span>
 </div>
-<input type="range" class="readiness-slider" id="sleepSlider" min="3" max="10" step="0.5" value="7">
+<input class="readiness-slider" id="sleepSlider" max="10" min="3" step="0.5" type="range" value="7"/>
 </div>
-
 <div class="readiness-item">
 <div class="readiness-label">
 <span>🌟 Sleep Quality</span>
@@ -515,7 +581,6 @@ main{padding:12px 12px 24px}
 <button class="readiness-btn high" data-val="5">Great</button>
 </div>
 </div>
-
 <div class="readiness-item">
 <div class="readiness-label">
 <span>😰 Stress Level</span>
@@ -529,7 +594,6 @@ main{padding:12px 12px 24px}
 <button class="readiness-btn low" data-val="5">Extreme</button>
 </div>
 </div>
-
 <div class="readiness-item">
 <div class="readiness-label">
 <span>🦵 Muscle Soreness</span>
@@ -543,7 +607,6 @@ main{padding:12px 12px 24px}
 <button class="readiness-btn low" data-val="5">Very</button>
 </div>
 </div>
-
 <div class="readiness-item">
 <div class="readiness-label">
 <span>⚡ Overall Readiness</span>
@@ -557,7 +620,6 @@ main{padding:12px 12px 24px}
 <button class="readiness-btn high" data-val="5">Great</button>
 </div>
 </div>
-
 <div class="readiness-summary">
 <div class="readiness-score med" id="readinessScoreSummary">
 <span>Today's Score:</span>
@@ -566,16 +628,14 @@ main{padding:12px 12px 24px}
 </div>
 <div class="readiness-hint" id="readinessHint">Moderate readiness - normal training load</div>
 </div>
-
 <div class="readiness-actions">
 <button class="secondary" onclick="closeReadinessModal()">Skip</button>
-<button class="primary" onclick="saveReadinessCheck()">Save & Continue</button>
+<button class="primary" onclick="saveReadinessCheck()">Save &amp; Continue</button>
 </div>
 </div>
 </div>
-
 <!-- Workout Detail Panel -->
-<div id="workoutDetail" class="workout-detail">
+<div class="workout-detail" id="workoutDetail">
 <div class="workout-panel">
 <div class="workout-header">
 <div>
@@ -590,81 +650,73 @@ main{padding:12px 12px 24px}
 <div class="workout-body" id="detailBody"></div>
 </div>
 </div>
-
 <!-- Execution Mode (one-set-at-a-time) -->
-<div id="execOverlay" class="exec-overlay">
-  <div class="exec-panel">
-    <div class="exec-header">
-      <div>
-        <div class="exec-title" id="execTitle">Workout</div>
-        <div class="exec-sub" id="execSubtitle">—</div>
-      </div>
-      <div class="flex">
-        <button class="secondary small" id="btnExecExit">✕ Exit</button>
-      </div>
-    </div>
-    <div class="exec-body">
-      <div class="exec-card">
-        <div class="exec-setline">
-          <div>
-            <div class="exec-exercise" id="execExercise">—</div>
-            <div class="exec-setmeta" id="execSetMeta">Set —</div>
-          </div>
-          <div class="exec-setmeta" id="execProgress">—</div>
-        </div>
-        <div class="exec-target" id="execTarget">—</div>
-
-        <div class="exec-inputs">
-          <div>
-            <label>Weight</label>
-            <input type="number" step="0.5" id="execWeight" inputmode="decimal">
-          </div>
-          <div>
-            <label>Reps</label>
-            <input type="number" id="execReps" inputmode="numeric">
-          </div>
-          <div class="rpe-wrap">
-            <label>RPE</label>
-            <input type="number" step="0.5" id="execRpe" inputmode="decimal">
-          </div>
-        </div>
-
-        <div class="exec-actions" id="execStatusBtns">
-          <button class="easy" data-status="easy">⬆ Easy</button>
-          <button class="made" data-status="made">✅ Made</button>
-          <button class="tough" data-status="tough">⚠ Tough</button>
-          <button class="miss" data-status="miss">❌ Miss</button>
-          <button class="skip" id="btnCutRemaining" title="Skip the remaining sets for this exercise">✂ Cut</button>
-        </div>
-
-        <div class="exec-footer">
-          <div class="flex" style="gap:8px">
-            <button class="exec-navbtn small" id="btnExecPrev">← Prev</button>
-            <button class="exec-navbtn small" id="btnExecNext">Next →</button>
-          </div>
-          <div class="exec-next" id="execNextPreview">Next: —</div>
-        </div>
-      </div>
-
-      <div class="day-card-actions" style="margin-top:14px">
-        <button class="btn-mini success" id="btnExecComplete">✓ Complete Session</button>
-        <button class="btn-mini secondary" id="btnExecOpenTable">View Full Table</button>
-      </div>
-    </div>
-  </div>
+<div class="exec-overlay" id="execOverlay">
+<div class="exec-panel">
+<div class="exec-header">
+<div>
+<div class="exec-title" id="execTitle">Workout</div>
+<div class="exec-sub" id="execSubtitle">—</div>
 </div>
-
+<div class="flex">
+<button class="secondary small" id="btnExecExit">✕ Exit</button>
+</div>
+</div>
+<div class="exec-body">
+<div class="exec-card">
+<div class="exec-setline">
+<div>
+<div class="exec-exercise" id="execExercise">—</div>
+<div class="exec-setmeta" id="execSetMeta">Set —</div>
+</div>
+<div class="exec-setmeta" id="execProgress">—</div>
+</div>
+<div class="exec-target" id="execTarget">—</div>
+<div class="exec-inputs">
+<div>
+<label>Weight</label>
+<input id="execWeight" inputmode="decimal" step="0.5" type="number"/>
+</div>
+<div>
+<label>Reps</label>
+<input id="execReps" inputmode="numeric" type="number"/>
+</div>
+<div class="rpe-wrap">
+<label>RPE</label>
+<input id="execRpe" inputmode="decimal" step="0.5" type="number"/>
+</div>
+</div>
+<div class="exec-actions" id="execStatusBtns">
+<button class="easy" data-status="easy">⬆ Easy</button>
+<button class="made" data-status="made">✅ Made</button>
+<button class="tough" data-status="tough">⚠ Tough</button>
+<button class="miss" data-status="miss">❌ Miss</button>
+<button class="skip" id="btnCutRemaining" title="Skip the remaining sets for this exercise">✂ Cut</button>
+</div>
+<div class="exec-footer">
+<div class="flex" style="gap:8px">
+<button class="exec-navbtn small" id="btnExecPrev">← Prev</button>
+<button class="exec-navbtn small" id="btnExecNext">Next →</button>
+</div>
+<div class="exec-next" id="execNextPreview">Next: —</div>
+</div>
+</div>
+<div class="day-card-actions" style="margin-top:14px">
+<button class="btn-mini success" id="btnExecComplete">✓ Complete Session</button>
+<button class="btn-mini secondary" id="btnExecOpenTable">View Full Table</button>
+</div>
+</div>
+</div>
+</div>
 <main>
 <!-- Setup Page -->
 <section id="pageSetup">
 <div class="card">
 <div class="card-title">Setup Your Training Block</div>
 <div class="card-subtitle">Configure your personalized Olympic weightlifting program</div>
-
 <div class="help-text" style="margin-top:16px">
 <strong>📊 What we'll create:</strong> A science-backed Olympic weightlifting program using block periodization, complexes, and proper exercise progression. Main lifting days focus on competition lifts with accessories, while other days feature active recovery or supplemental work.
 </div>
-
 <!-- Step 1: Basic Info -->
 <div class="setup-section">
 <div class="section-header">
@@ -674,82 +726,243 @@ main{padding:12px 12px 24px}
 <div class="section-subtitle">Units and program structure</div>
 </div>
 </div>
-
 <!-- Profile selection (local only) -->
 <div class="card" style="margin-top:12px">
-  <div class="card-title">User</div>
-  <div class="form-row" style="margin-top:10px">
-    <div class="form-group" style="min-width:220px;flex:1">
-      <div class="label-row"><label>Profile</label><button class="info-btn" type="button" onclick="showInfo('profile')" aria-label="Profile info">ⓘ</button></div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <select id="setupProfileSelect" style="min-width:220px;flex:1"></select>
-        <button class="secondary small" id="btnSetupNewProfile" type="button">New</button>
-      </div>
+<div class="card-title">User</div>
+<div class="form-row" style="margin-top:10px">
+<div class="form-group" style="min-width:220px;flex:1">
+<div class="label-row"><label>Profile</label><button aria-label="Profile info" class="info-btn" onclick="showInfo('profile')" type="button">ⓘ</button></div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+<select id="setupProfileSelect" style="min-width:220px;flex:1"></select>
+<button class="secondary small" id="btnSetupNewProfile" type="button">New</button>
 </div>
-  </div>
-  <div id="setupNewProfileRow" style="display:none;margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap">
-    <input id="setupNewProfileName" type="text" placeholder="Profile name" style="flex:1;min-width:180px">
-    <button class="primary small" id="btnSetupCreateProfile" type="button">Create</button>
-  </div>
 </div>
-
+</div>
+<div id="setupNewProfileRow" style="display:none;margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap">
+<input id="setupNewProfileName" placeholder="Profile name" style="flex:1;min-width:180px" type="text"/>
+<button class="primary small" id="btnSetupCreateProfile" type="button">Create</button>
+</div>
+</div>
 <div class="form-row">
-<div class="form-group"><div class="label-row"><label>Units</label><button class="info-btn" type="button" onclick="showInfo('units')" aria-label="Units info">ⓘ</button></div><select id="setupUnits"><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></div>
-<div class="form-group"><div class="label-row"><label>Block Length</label><button class="info-btn" type="button" onclick="showInfo('blocklength')" aria-label="Block length info">ⓘ</button></div><select id="setupBlockLength"><option value="4">4 Weeks</option><option value="6">6 Weeks</option><option value="8" selected>8 Weeks</option><option value="12">12 Weeks</option></select></div>
-<div class="form-group"><div class="label-row"><label>Program Type</label><button class="info-btn" type="button" onclick="showInfo('programtype')" aria-label="Program type info">ⓘ</button></div><select id="setupProgram"><option value="general">General Strength & Technique</option><option value="strength">Maximum Strength</option><option value="hypertrophy">Hypertrophy</option><option value="competition">Competition Prep</option><option value="technique">Technique Development</option></select></div>
-
-
-<div class="form-group"><div class="label-row"><label>Athlete Mode</label><button class="info-btn" onclick="showInfo('mode')" aria-label="Athlete mode info">ⓘ</button></div>
-  <select id="setupAthleteMode">
-    <option value="recreational">Recreational (sustainable)</option>
-    <option value="competition">Competition (peak/taper)</option>
-  </select>
+<div class="form-group"><div class="label-row"><label>Units</label><button aria-label="Units info" class="info-btn" onclick="showInfo('units')" type="button">ⓘ</button></div><select id="setupUnits"><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></div>
+<div class="form-group"><div class="label-row"><label>Block Length</label><button aria-label="Block length info" class="info-btn" onclick="showInfo('blocklength')" type="button">ⓘ</button></div><select id="setupBlockLength"><option value="4">4 Weeks</option><option value="6">6 Weeks</option><option selected="" value="8">8 Weeks</option><option value="12">12 Weeks</option></select></div>
+<div class="form-group"><div class="label-row"><label>Program Type</label><button aria-label="Program type info" class="info-btn" onclick="showInfo('programtype')" type="button">ⓘ</button></div><select id="setupProgram"><option value="general">General Strength &amp; Technique</option><option value="strength">Maximum Strength</option><option value="hypertrophy">Hypertrophy</option><option value="competition">Competition Prep</option><option value="technique">Technique Development</option></select></div>
+<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button aria-label="Ramp-in info" class="info-btn" onclick="showInfo('transition')">ⓘ</button></div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+<select id="setupTransitionWeeks" style="min-width:180px">
+<option value="0">No ramp-in (not recommended)</option>
+<option value="1">Ramp-in: 1 week</option>
+<option value="2">Ramp-in: 2 weeks</option>
+</select>
+<select id="setupTransitionProfile" style="min-width:180px">
+<option value="standard">Standard</option>
+<option value="conservative">Conservative</option>
+<option value="aggressive">Aggressive</option>
+</select>
 </div>
+</div>
+<div class="setup-section" style="margin-top:14px">
+  <div class="section-header">
+    <span class="section-number">1</span>
+    <div>
+      <div class="section-title">Program Preferences</div>
+      <div class="section-desc">Optional: streamline how the program feels day-to-day (volume, blocks, auto-regulation).</div>
+    </div>
+  </div>
 
-<div class="form-group"><div class="label-row"><label>Program Switch Ramp-In</label><button class="info-btn" onclick="showInfo('transition')" aria-label="Ramp-in info">ⓘ</button></div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <select id="setupTransitionWeeks" style="min-width:180px">
-      <option value="0">No ramp-in (not recommended)</option>
-      <option value="1">Ramp-in: 1 week</option>
-      <option value="2">Ramp-in: 2 weeks</option>
+  <div class="form-group">
+    <div class="label-row">
+      <label>Preference Preset</label>
+      <button class="info-btn" type="button" onclick="showInfo('preferences')">ⓘ</button>
+    </div>
+    <select id="setupPrefPreset">
+      <option value="balanced" selected>Balanced (recommended)</option>
+      <option value="recovery">Recovery-biased (lower fatigue)</option>
+      <option value="performance">Performance-biased (more intensity)</option>
     </select>
-    <select id="setupTransitionProfile" style="min-width:180px">
-      <option value="standard">Standard</option>
-      <option value="conservative">Conservative</option>
-      <option value="aggressive">Aggressive</option>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Athlete Mode</label>
+      <button class="info-btn" type="button" onclick="showInfo('athletemode')">ⓘ</button>
+    </div>
+    <select id="setupAthleteMode">
+      <option value="recreational" selected>Recreational (sustainable)</option>
+      <option value="competition">Competition (peak/taper)</option>
     </select>
   </div>
-</div>
-<div class="form-group"><div class="label-row"><label>Equipment</label><button class="info-btn" type="button" onclick="showInfo('blocks')" aria-label="Blocks equipment info">ⓘ</button></div>
-  <div class="toggle-row">
-    <span class="toggle-label">Include blocks (if available)</span>
-    <label class="switch" aria-label="Include blocks">
-      <input type="checkbox" id="setupIncludeBlocks" checked>
-      <span class="slider"></span>
-    </label>
-  </div>
-  </div>
-</div>
 
-<div class="form-row" style="margin-top:14px">
-  <div class="form-group"><div class="label-row"><label>Volume Preference</label><button class="info-btn" type="button" onclick="showInfo('volume')" aria-label="Volume preference info">ⓘ</button></div>
+  <div class="form-group">
+    <div class="label-row">
+      <label>Blocks / Variations</label>
+      <button class="info-btn" type="button" onclick="showInfo('blocks')">ⓘ</button>
+    </div>
+    <select id="setupIncludeBlocks">
+      <option value="yes" selected>Blocks available (include block variations)</option>
+      <option value="no">No blocks (swap to hang/alternate)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Volume Preference</label>
+      <button class="info-btn" type="button" onclick="showInfo('volume')">ⓘ</button>
+    </div>
     <select id="setupVolumePref">
       <option value="standard">Standard (higher volume)</option>
       <option value="reduced" selected>Reduced (recommended for recreational)</option>
       <option value="minimal">Minimal (low-fatigue / maintenance)</option>
     </select>
+  </div>
+
+  <div class="form-group">
+    <div class="label-row">
+      <label>Auto-volume Regulation</label>
+      <button class="info-btn" type="button" onclick="showInfo('autocut')">ⓘ</button>
+    </div>
+    <select id="setupAutoCut">
+      <option value="yes" selected>On (suggest cutting remaining sets when technique/fatigue spikes)</option>
+      <option value="no">Off</option>
+    </select>
+  </div>
 </div>
 
-  <div class="form-group"><div class="label-row"><label>Auto-Volume Regulation</label><button class="info-btn" type="button" onclick="showInfo('autocut')" aria-label="Auto-volume regulation info">ⓘ</button></div>
-    <div class="toggle-row">
-      <span class="toggle-label">Suggest cutting remaining sets when technique/fatigue spikes</span>
-      <label class="switch" aria-label="Auto-volume regulation">
-        <input type="checkbox" id="setupAutoCut" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
-    </div>
 </div>
+<!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
+<!-- Athlete Details (NEW) -->
+<details class="card" open="" style="margin-top:16px">
+<summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">
+<span style="font-weight:700">Athlete Details (optional)</span>
+<span style="opacity:.75;font-size:12px">Tap to expand/collapse</span>
+</summary>
+<div style="margin-top:12px">
+<div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+<div style="font-weight:600">Basics</div>
+<button aria-label="Athlete details info" class="info-btn" onclick="showInfo('athletedetails')" type="button">ⓘ</button>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Age</label>
+<input id="setupAge" max="99" min="10" placeholder="Optional (e.g., 32)" step="1" type="number"/>
+</div>
+<div class="form-group">
+<div class="label-row"><label>Training Age</label><button aria-label="Training age info" class="info-btn" onclick="showInfo('trainingage')" type="button">ⓘ</button></div>
+<select id="setupTrainingAge">
+<option value="0.5">0–1 year</option>
+<option selected="" value="1">1–2 years</option>
+<option value="3">3–5 years</option>
+<option value="6">6+ years</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<div class="label-row"><label>Recovery Capacity</label><button aria-label="Recovery info" class="info-btn" onclick="showInfo('recovery')" type="button">ⓘ</button></div>
+<select id="setupRecovery">
+<option value="1">Low</option>
+<option value="2">Below average</option>
+<option selected="" value="3">Typical</option>
+<option value="4">Good</option>
+<option value="5">High</option>
+</select>
+</div>
+<div class="form-group">
+<div class="label-row"><label>Primary Limiter</label><button aria-label="Limiter info" class="info-btn" onclick="showInfo('limiter')" type="button">ⓘ</button></div>
+<select id="setupLimiter">
+<option selected="" value="balanced">Balanced</option>
+<option value="pull">Pull strength</option>
+<option value="turnover">Turnover / speed under</option>
+<option value="receiving">Receiving position</option>
+<option value="overhead">Overhead / jerk stability</option>
+<option value="squat">Squat strength</option>
+<option value="speed">Speed / power</option>
+</select>
+</div>
+</div>
+</div>
+<div style="margin-top:14px">
+<div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+<div style="font-weight:600">Meet planning</div>
+<button aria-label="Meet planning info" class="info-btn" onclick="showInfo('meetplanning')" type="button">ⓘ</button>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Competition Date</label>
+<input id="setupCompetitionDate" type="date"/>
+</div>
+<div class="form-group">
+<div class="label-row"><label>Macro Period</label><button aria-label="Macro period info" class="info-btn" onclick="showInfo('macroperiod')" type="button">ⓘ</button></div>
+<select id="setupMacroPeriod">
+<option selected="" value="AUTO">Auto (from meet date)</option>
+<option value="GDP">GDP (General Development)</option>
+<option value="PP">PP (Preparatory)</option>
+<option value="CC">CC (Competition)</option>
+<option value="TP">TP (Transition)</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<div class="label-row"><label>Taper Style</label><button aria-label="Taper info" class="info-btn" onclick="showInfo('taper')" type="button">ⓘ</button></div>
+<select id="setupTaperStyle">
+<option selected="" value="default">Default (gentle deload)</option>
+<option value="cwfhc">CWFHC 90/70/50 (3 sessions)</option>
+</select>
+</div>
+<div class="form-group">
+<div class="label-row"><label>Heavy Single Exposure</label><button aria-label="Heavy single info" class="info-btn" onclick="showInfo('heavysingle')" type="button">ⓘ</button></div>
+<select id="setupHeavySingleExposure">
+<option selected="" value="off">Off</option>
+<option value="on">On (advanced/competition)</option>
+</select>
+</div>
+</div>
+</div>
+<div style="margin-top:14px">
+<div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+<div style="font-weight:600">Injury (optional)</div>
+<button aria-label="Injuries info" class="info-btn" onclick="showInfo('injuries')" type="button">ⓘ</button>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Active injury</label>
+<select id="setupInjuryPreset">
+<option selected="" value="none">None</option>
+<option value="shoulder">Shoulder</option>
+<option value="wrist">Wrist</option>
+<option value="elbow">Elbow</option>
+<option value="back">Back</option>
+<option value="hip">Hip</option>
+<option value="knee">Knee</option>
+<option value="ankle">Ankle</option>
+<option value="multiple">Multiple (advanced)</option>
+</select>
+</div>
+<div class="form-group" style="display:flex;align-items:flex-end">
+<div id="injuryAdvancedHint" style="font-size:12px;opacity:.8;display:none">Select multiple below.</div>
+</div>
+</div>
+<div id="injuryAdvancedGrid" style="display:none">
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+<label class="chip"><input id="injShoulder" type="checkbox"/> Shoulder</label>
+<label class="chip"><input id="injWrist" type="checkbox"/> Wrist</label>
+<label class="chip"><input id="injElbow" type="checkbox"/> Elbow</label>
+<label class="chip"><input id="injBack" type="checkbox"/> Back</label>
+<label class="chip"><input id="injHip" type="checkbox"/> Hip</label>
+<label class="chip"><input id="injKnee" type="checkbox"/> Knee</label>
+<label class="chip"><input id="injAnkle" type="checkbox"/> Ankle</label>
+</div>
+</div>
+</div>
+
+</details>
+</div>
+</div>
+<!-- ===== End Advanced Programming ===== -->
+
+
+
 
 <!-- Step 2: Training Schedule -->
 <div class="setup-section">
@@ -760,45 +973,41 @@ main{padding:12px 12px 24px}
 <div class="section-subtitle">Select your main lifting days, accessory days, and session duration</div>
 </div>
 </div>
-
 <div class="form-group" style="margin-top:16px">
-<div class="label-row"><label>Main Lifting Days (Olympic Weightlifting Focus)</label><button class="info-btn" type="button" onclick="showInfo('maindays')" aria-label="Main lifting days info">ⓘ</button></div>
+<div class="label-row"><label>Main Lifting Days (Olympic Weightlifting Focus)</label><button aria-label="Main lifting days info" class="info-btn" onclick="showInfo('maindays')" type="button">ⓘ</button></div>
 <div class="day-selector" id="mainDaySelector">
-<button type="button" class="day-btn" data-day="1" data-type="main">Mon</button>
-<button type="button" class="day-btn" data-day="2" data-type="main">Tue</button>
-<button type="button" class="day-btn" data-day="3" data-type="main">Wed</button>
-<button type="button" class="day-btn" data-day="4" data-type="main">Thu</button>
-<button type="button" class="day-btn" data-day="5" data-type="main">Fri</button>
-<button type="button" class="day-btn" data-day="6" data-type="main">Sat</button>
-<button type="button" class="day-btn" data-day="7" data-type="main">Sun</button>
+<button class="day-btn" data-day="1" data-type="main" type="button">Mon</button>
+<button class="day-btn" data-day="2" data-type="main" type="button">Tue</button>
+<button class="day-btn" data-day="3" data-type="main" type="button">Wed</button>
+<button class="day-btn" data-day="4" data-type="main" type="button">Thu</button>
+<button class="day-btn" data-day="5" data-type="main" type="button">Fri</button>
+<button class="day-btn" data-day="6" data-type="main" type="button">Sat</button>
+<button class="day-btn" data-day="7" data-type="main" type="button">Sun</button>
 </div>
 </div>
-
 <div class="form-group" style="margin-top:16px">
-<div class="label-row"><label>Accessory Days (Supplemental Strength Work)</label><button class="info-btn" type="button" onclick="showInfo('accessorydays')" aria-label="Accessory days info">ⓘ</button></div>
+<div class="label-row"><label>Accessory Days (Supplemental Strength Work)</label><button aria-label="Accessory days info" class="info-btn" onclick="showInfo('accessorydays')" type="button">ⓘ</button></div>
 <div class="day-selector" id="accessoryDaySelector">
-<button type="button" class="day-btn" data-day="1" data-type="accessory">Mon</button>
-<button type="button" class="day-btn" data-day="2" data-type="accessory">Tue</button>
-<button type="button" class="day-btn" data-day="3" data-type="accessory">Wed</button>
-<button type="button" class="day-btn" data-day="4" data-type="accessory">Thu</button>
-<button type="button" class="day-btn" data-day="5" data-type="accessory">Fri</button>
-<button type="button" class="day-btn" data-day="6" data-type="accessory">Sat</button>
-<button type="button" class="day-btn" data-day="7" data-type="accessory">Sun</button>
+<button class="day-btn" data-day="1" data-type="accessory" type="button">Mon</button>
+<button class="day-btn" data-day="2" data-type="accessory" type="button">Tue</button>
+<button class="day-btn" data-day="3" data-type="accessory" type="button">Wed</button>
+<button class="day-btn" data-day="4" data-type="accessory" type="button">Thu</button>
+<button class="day-btn" data-day="5" data-type="accessory" type="button">Fri</button>
+<button class="day-btn" data-day="6" data-type="accessory" type="button">Sat</button>
+<button class="day-btn" data-day="7" data-type="accessory" type="button">Sun</button>
 </div>
 </div>
-
 <div class="form-group" style="margin-top:16px">
-<div class="label-row"><label>Average Session Duration</label><button class="info-btn" type="button" onclick="showInfo('duration')" aria-label="Average session duration info">ⓘ</button></div>
+<div class="label-row"><label>Average Session Duration</label><button aria-label="Average session duration info" class="info-btn" onclick="showInfo('duration')" type="button">ⓘ</button></div>
 <select id="setupDuration">
 <option value="45">45 minutes (Time-efficient)</option>
 <option value="60">60 minutes (Balanced)</option>
-<option value="75" selected>75 minutes (Standard)</option>
+<option selected="" value="75">75 minutes (Standard)</option>
 <option value="90">90 minutes (Extended)</option>
 <option value="120">120 minutes (Competition prep)</option>
 </select>
 </div>
 </div>
-
 <!-- Step 3: Current Maxes -->
 <div class="setup-section">
 <div class="section-header">
@@ -808,51 +1017,41 @@ main{padding:12px 12px 24px}
 <div class="section-subtitle">Enter your competition lift and squat maxes</div>
 </div>
 </div>
-
 <div class="form-row">
-<div class="form-group"><label>Snatch 1RM</label><input type="number" id="setupSnatch" step="0.5" placeholder="80"></div>
-<div class="form-group"><label>Clean & Jerk 1RM</label><input type="number" id="setupCleanJerk" step="0.5" placeholder="100"></div>
-<div class="form-group"><label>Front Squat 1RM</label><input type="number" id="setupFrontSquat" step="0.5" placeholder="130"></div>
-<div class="form-group"><label>Back Squat 1RM</label><input type="number" id="setupBackSquat" step="0.5" placeholder="150"></div>
+<div class="form-group"><label>Snatch 1RM</label><input id="setupSnatch" placeholder="80" step="0.5" type="number"/></div>
+<div class="form-group"><label>Clean &amp; Jerk 1RM</label><input id="setupCleanJerk" placeholder="100" step="0.5" type="number"/></div>
+<div class="form-group"><label>Front Squat 1RM</label><input id="setupFrontSquat" placeholder="130" step="0.5" type="number"/></div>
+<div class="form-group"><label>Back Squat 1RM</label><input id="setupBackSquat" placeholder="150" step="0.5" type="number"/></div>
 </div>
-</div>
+<div class="setup-actions-bottom">
 
-<div class="flex" style="margin-top:24px;gap:12px">
-<button id="btnGenerateBlock" class="success" style="flex:1">🚀 Generate Training Block</button>
-<button id="btnDemoData" class="secondary">Demo</button>
-</div>
+
+<div class="setup-actions"><div class="btn-row"><button class="primary" id="btnGenerateBlock">🚀 Generate Training Block</button><button class="secondary" id="btnDemo">Demo</button></div></div></div>
 </div>
 </section>
-
-<!-- Week Page -->
-<section id="pageWeek" class="hidden">
-<!-- Tabs for Navigation -->
-<div class="tab-navigation">
-<button class="tab-btn active" data-tab="dashboard">🏠 Dashboard</button>
-<button class="tab-btn" data-tab="workout">🏋️ Workout</button>
-<button class="tab-btn" data-tab="history">📊 History</button>
-<button class="tab-btn" data-tab="settings">⚙️ Settings</button>
-</div>
-
-<div class="tab-content active" id="tabDashboard">
+<!-- Dashboard Page -->
+<section class="hidden" id="pageDashboard">
+<div class="workout-section" id="tabDashboard">
 <div class="card">
-  <div class="card-title">Overview</div>
-  <div class="card-subtitle" id="dashboardSubtitle">—</div>
-  <div class="stats-grid" id="dashboardStats" style="margin-top:14px"></div>
-  <div class="flex" style="margin-top:14px">
-    <button class="success" id="btnGoWorkout" style="flex:1">🏋️ Go to Workout</button>
-    <button class="secondary" id="btnLogReadiness" title="Log readiness">💪 Readiness</button>
-  </div>
+<div class="card-title">Overview</div>
+<div class="card-subtitle" id="dashboardSubtitle">—</div>
+<div class="stats-grid" id="dashboardStats" style="margin-top:14px"></div>
+<div class="flex" style="margin-top:14px">
+<button class="success" id="btnGoWorkout" style="flex:1">🏋️ Go to Workout</button>
+<button class="secondary" id="btnLogReadiness" title="Log readiness">💪 Readiness</button>
 </div>
-
+</div>
 <div class="card">
-  <div class="card-title">Current Maxes</div>
-  <div class="card-subtitle">Your working 1RMs</div>
-  <div class="stats-grid" id="dashboardMaxes" style="margin-top:14px"></div>
+<div class="card-title">Current Maxes</div>
+<div class="card-subtitle">Your working 1RMs</div>
+<div class="stats-grid" id="dashboardMaxes" style="margin-top:14px"></div>
 </div>
 </div>
 
-<div class="tab-content" id="tabWorkout">
+</section>
+<!-- Workout Page -->
+<section class="hidden" id="pageWorkout">
+<div class="workout-section" id="tabWorkout">
 <div class="card">
 <div class="week-header">
 <div>
@@ -868,14 +1067,15 @@ main{padding:12px 12px 24px}
 <div class="stats-grid" id="weekStats"></div>
 <div class="progress-bar"><div class="progress-fill" id="weekProgress"></div></div>
 </div>
-
 <div class="card">
 <div class="card-title" id="weekTitle">This Week's Training</div>
 <div class="calendar-grid" id="weekCalendar"></div>
 </div>
 </div>
 
-<div class="tab-content" id="tabHistory">
+</section>
+
+<section class="page hidden" id="pageHistory">
 <div class="card">
 <div class="flex-between" style="margin-bottom:16px">
 <div><div class="card-title">Training History</div><div class="card-subtitle">Completed sessions</div></div>
@@ -883,121 +1083,106 @@ main{padding:12px 12px 24px}
 </div>
 <div id="historyList"></div>
 </div>
-</div>
-
-<div class="tab-content" id="tabSettings">
+</section>
+<section class="page hidden" id="pageSettings">
 <div class="card">
-<div class="card-title">Profile & Settings</div>
+<div class="card-title">Profile &amp; Settings</div>
 <div class="card-subtitle" id="settingsInfo">—</div>
-
 <div class="form-group" style="margin-top:18px">
-  <div class="label-row"><label>Profile</label><button class="info-btn" type="button" onclick="showInfo('profile')" aria-label="Profile info">ⓘ</button></div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <select id="settingsProfileSelect" style="min-width:200px;flex:1"></select>
-    <button class="secondary small" id="btnNewProfile" type="button">New</button>
-  </div>
-  <div id="newProfileRow" style="display:none;margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap">
-    <input id="newProfileName" type="text" placeholder="Profile name" style="flex:1;min-width:180px">
-    <button class="primary small" id="btnCreateProfile" type="button">Create</button>
-  </div>
-  <div class="muted" style="margin-top:8px;font-size:12px">Profiles are stored on this device/browser only.</div>
+<div class="label-row"><label>Profile</label><button aria-label="Profile info" class="info-btn" onclick="showInfo('profile')" type="button">ⓘ</button></div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+<select id="settingsProfileSelect" style="min-width:200px;flex:1"></select>
+<button class="secondary small" id="btnNewProfile" type="button">New</button>
 </div>
-
-
+<div id="newProfileRow" style="display:none;margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap">
+<input id="newProfileName" placeholder="Profile name" style="flex:1;min-width:180px" type="text"/>
+<button class="primary small" id="btnCreateProfile" type="button">Create</button>
+</div>
+<div class="muted" style="margin-top:8px;font-size:12px">Profiles are stored on this device/browser only.</div>
+</div>
 <div class="form-group" style="margin-top:18px">
-<div class="label-row"><label>Units</label><button class="info-btn" type="button" onclick="showInfo('units')" aria-label="Units info">ⓘ</button></div>
+<div class="label-row"><label>Units</label><button aria-label="Units info" class="info-btn" onclick="showInfo('units')" type="button">ⓘ</button></div>
 <select id="settingsUnits"><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select>
 </div>
-
 <div class="form-group" style="margin-top:12px">
-<div class="label-row"><label>Equipment</label><button class="info-btn" type="button" onclick="showInfo('blocks')" aria-label="Blocks equipment info">ⓘ</button></div>
+<div class="label-row"><label>Equipment</label><button aria-label="Blocks equipment info" class="info-btn" onclick="showInfo('blocks')" type="button">ⓘ</button></div>
 <div class="toggle-row">
-  <span class="toggle-label">Include blocks (if available)</span>
-  <label class="switch" aria-label="Include blocks">
-    <input type="checkbox" id="settingsIncludeBlocks" checked>
-    <span class="slider"></span>
-  </label>
+<span class="toggle-label">Include blocks (if available)</span>
+<label aria-label="Include blocks" class="switch">
+<input checked="" id="settingsIncludeBlocks" type="checkbox"/>
+<span class="slider"></span>
+</label>
 </div>
 </div>
-
-
 <div class="form-group" style="margin-top:14px">
-<div class="label-row"><label>Volume Preference</label><button class="info-btn" type="button" onclick="showInfo('volume')" aria-label="Volume preference info">ⓘ</button></div>
+<div class="label-row"><label>Volume Preference</label><button aria-label="Volume preference info" class="info-btn" onclick="showInfo('volume')" type="button">ⓘ</button></div>
 <select id="settingsVolumePref">
-  <option value="standard">Standard (higher volume)</option>
-  <option value="reduced">Reduced (recommended)</option>
-  <option value="minimal">Minimal (low-fatigue / maintenance)</option>
+<option value="standard">Standard (higher volume)</option>
+<option value="reduced">Reduced (recommended)</option>
+<option value="minimal">Minimal (low-fatigue / maintenance)</option>
 </select>
 </div>
-
 <div class="form-group" style="margin-top:14px">
-<div class="label-row"><label>Auto-Volume Regulation</label><button class="info-btn" type="button" onclick="showInfo('autocut')" aria-label="Auto-volume regulation info">ⓘ</button></div>
+<div class="label-row"><label>Auto-Volume Regulation</label><button aria-label="Auto-volume regulation info" class="info-btn" onclick="showInfo('autocut')" type="button">ⓘ</button></div>
 <div class="toggle-row">
-  <span class="toggle-label">Suggest cutting remaining sets when fatigue spikes</span>
-  <label class="switch" aria-label="Auto-volume regulation">
-    <input type="checkbox" id="settingsAutoCut" checked>
-    <span class="slider"></span>
-  </label>
+<span class="toggle-label">Suggest cutting remaining sets when fatigue spikes</span>
+<label aria-label="Auto-volume regulation" class="switch">
+<input checked="" id="settingsAutoCut" type="checkbox"/>
+<span class="slider"></span>
+</label>
 </div>
 </div>
-
 <div class="card-title" style="margin-top:20px;margin-bottom:14px">AI Coach</div>
-
 <div class="form-group">
-  <div class="label-row"><label>AI Features</label><button class="info-btn" type="button" onclick="showInfo('aicoach')" aria-label="AI coach info">ⓘ</button></div>
-  <div class="toggle-row">
-    <span class="toggle-label">Enable AI Programming Assistant</span>
-    <label class="switch" aria-label="Enable AI">
-      <input type="checkbox" id="settingsAIEnabled" checked>
-      <span class="slider"></span>
-    </label>
-  </div>
-  <div class="help" style="margin-top:10px">
+<div class="label-row"><label>AI Features</label><button aria-label="AI coach info" class="info-btn" onclick="showInfo('aicoach')" type="button">ⓘ</button></div>
+<div class="toggle-row">
+<span class="toggle-label">Enable AI Programming Assistant</span>
+<label aria-label="Enable AI" class="switch">
+<input checked="" id="settingsAIEnabled" type="checkbox"/>
+<span class="slider"></span>
+</label>
+</div>
+<div class="help" style="margin-top:10px">
     . Your token stays in Netlify environment variables.
   </div>
 </div>
-
 <div class="form-group" style="margin-top:14px">
-  <div class="label-row"><label>Hugging Face Model</label><button class="info-btn" type="button" onclick="showInfo('hfmodel')" aria-label="Hugging Face model info">ⓘ</button></div>
-  <input id="settingsAIModel" type="text" placeholder="e.g., meta-llama/Meta-Llama-3.1-8B-Instruct" />
-  <div class="help"> (HF_MODEL).</div>
-</div>
-
+<div class="label-row"><label>Hugging Face Model</label><button aria-label="Hugging Face model info" class="info-btn" onclick="showInfo('hfmodel')" type="button">ⓘ</button></div>
+<input id="settingsAIModel" placeholder="e.g., meta-llama/Meta-Llama-3.1-8B-Instruct" type="text">
+<div class="help"> (HF_MODEL).</div>
+</input></div>
 <div class="form-group" style="margin-top:10px">
-  <div class="label-row"><label>Test AI Connection</label><button class="info-btn" type="button" onclick="showInfo('aitest')" aria-label="AI connection test info">ⓘ</button></div>
-  <div class="flex" style="gap:10px;align-items:center">
-    <button id="btnTestAI" class="secondary" style="flex:0 0 auto">Test Connection</button>
-    <div id="aiTestStatus" style="font-size:12px;color:var(--text-dim);line-height:1.2"></div>
-  </div>
-  <div class="help" style="margin-top:8px"> to confirm the token and model work.</div>
+<div class="label-row"><label>Test AI Connection</label><button aria-label="AI connection test info" class="info-btn" onclick="showInfo('aitest')" type="button">ⓘ</button></div>
+<div class="flex" style="gap:10px;align-items:center">
+<button class="secondary" id="btnTestAI" style="flex:0 0 auto">Test Connection</button>
+<div id="aiTestStatus" style="font-size:12px;color:var(--text-dim);line-height:1.2"></div>
 </div>
-
+<div class="help" style="margin-top:8px"> to confirm the token and model work.</div>
+</div>
 <div class="label-row" style="margin-top:20px;margin-bottom:14px">
-  <div class="card-title" style="margin:0">Current Maxes</div>
-  <button class="info-btn" type="button" onclick="showInfo('maxes')" aria-label="Current maxes info">ⓘ</button>
+<div class="card-title" style="margin:0">Current Maxes</div>
+<button aria-label="Current maxes info" class="info-btn" onclick="showInfo('maxes')" type="button">ⓘ</button>
 </div>
+
 <div class="form-row">
-<div class="form-group"><label>Snatch 1RM</label><input type="number" id="settingsSnatch" step="0.5"></div>
-<div class="form-group"><label>Clean & Jerk 1RM</label><input type="number" id="settingsCJ" step="0.5"></div>
-<div class="form-group"><label>Front Squat 1RM</label><input type="number" id="settingsFS" step="0.5"></div>
-<div class="form-group"><label>Back Squat 1RM</label><input type="number" id="settingsBS" step="0.5"></div>
+<div class="form-group"><label>Snatch 1RM</label><input id="settingsSnatch" step="0.5" type="number"/></div>
+<div class="form-group"><label>Clean &amp; Jerk 1RM</label><input id="settingsCJ" step="0.5" type="number"/></div>
+<div class="form-group"><label>Front Squat 1RM</label><input id="settingsFS" step="0.5" type="number"/></div>
+<div class="form-group"><label>Back Squat 1RM</label><input id="settingsBS" step="0.5" type="number"/></div>
 </div>
-
-<div class="flex" style="margin-top:20px"><button id="btnSaveSettings" class="success" style="flex:1">Save Changes</button><button id="btnNewBlock" class="secondary">New Block</button></div>
-
+<div class="flex" style="margin-top:20px"><button class="success" id="btnSaveSettings" style="flex:1">Save &amp; Recalculate</button></div>
 <div class="card-title" style="margin-top:20px;margin-bottom:14px">Data Management</div>
-<div class="flex"><button id="btnResetAll" class="danger" style="flex:1">Reset All Data</button></div>
-</div>
+<div class="flex"><button class="danger" id="btnResetAll" style="flex:1">Reset All Data</button></div>
 </div>
 </section>
 </main>
-
-<nav style="display:none">
-<button class="nav-item active" id="navWeek"><div class="nav-icon">📅</div>Week</button>
-<button class="nav-item" id="navHistory"><div class="nav-icon">📊</div>History</button>
-<button class="nav-item" id="navSettings"><div class="nav-icon">⚙️</div>Settings</button>
+<script src="app_sets_edit.js?v=1700"></script>
+<nav aria-label="Primary" class="bottom-nav">
+<button class="nav-btn active" id="navSetup" type="button">🛠️<span>Setup</span></button>
+<button class="nav-btn" id="navDashboard" type="button">🏠<span>Dashboard</span></button>
+<button class="nav-btn" id="navWorkout" type="button">🏋️<span>Workout</span></button>
+<button class="nav-btn" id="navHistory" type="button">📊<span>History</span></button>
+<button class="nav-btn" id="navSettings" type="button">⚙️<span>Settings</span></button>
 </nav>
-
-<script src="app.js"></script>
 </body>
 </html>
