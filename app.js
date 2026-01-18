@@ -474,10 +474,103 @@ function transitionMultiplier(profile, weekIndex) {
     volume: minV + (1 - minV) * t
   };
 }
+// ---------------------------
+// Variation + progression helpers (v2 generator)
+// ---------------------------
+function hash32(str) {
+  // simple deterministic hash
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function blockSeed() {
+  return (state.currentBlock && state.currentBlock.seed) ? Number(state.currentBlock.seed) : 0;
+}
+
+function pickFromPool(pool, key) {
+  if (!pool || pool.length === 0) return null;
+  const h = hash32(String(key));
+  return pool[h % pool.length];
+}
+
+// Week-to-week micro-progression inside the 4-week wave.
+// This fixes the "week 1 and week 2 look the same" issue.
+function microIntensityFor(profile, phase, weekIndex) {
+  const w = weekIndex % 4;
+  // athlete mode (if present)
+  const mode = (profile.athleteMode || profile.mode || 'recreational'); // 'recreational' | 'competition'
+  // program type can bias intensity slightly
+  const pt = (profile.programType || 'general');
+
+  // Base ranges
+  let acc = [0.70, 0.74];         // W1/W2
+  let intens = 0.85;              // W3
+  let del = 0.62;                 // W4
+
+  if (mode === 'competition' || pt === 'competition') {
+    acc = [0.73, 0.77];
+    intens = 0.88;
+    del = 0.65;
+  }
+  if (pt === 'powerbuilding') {
+    acc = [0.70, 0.75];
+    intens = 0.83;
+    del = 0.62;
+  }
+  if (pt === 'hypertrophy' || pt === 'bodybuilding' || pt === 'general_fitness') {
+    acc = [0.68, 0.72];
+    intens = 0.80;
+    del = 0.60;
+  }
+
+  if (phase === 'accumulation') return (w === 0 ? acc[0] : acc[1]);
+  if (phase === 'intensification') return intens;
+  return del;
+}
+
+// Small pct adjustment depending on variation type (keeps prescriptions realistic).
+function variationPctAdj(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('complex')) return -0.05;
+  if (n.includes('pause')) return -0.04;
+  if (n.includes('hang')) return -0.03;
+  if (n.includes('block')) return -0.02;
+  if (n.includes('power')) return -0.02;
+  if (n.includes('tempo')) return -0.05;
+  return 0;
+}
+
+function chooseVariation(family, profile, weekIndex, phase, slotKey) {
+  const pool = SWAP_POOLS[family] || [];
+  if (pool.length === 0) return { name: slotKey, liftKey: '' };
+
+  // Reduce variation in competition peaks (if meet block later adds this)
+  const pt = (profile.programType || 'general');
+  const mode = (profile.athleteMode || profile.mode || 'recreational');
+  const preferSpecific = (mode === 'competition' || pt === 'competition');
+
+  const seed = blockSeed() || Number(profile.lastBlockSeed || 0) || 0;
+  const key = `${seed}|${family}|${slotKey}|w${weekIndex}|${phase}|${pt}|${mode}`;
+
+  // In competition-ish blocks, prefer the first option in pool (usually the classic lift) more often.
+  if (preferSpecific && (phase === 'intensification')) {
+    // 70% classic, 30% rotated
+    const h = hash32(key);
+    if ((h % 10) < 7) return pool[0];
+  }
+
+  // Rotate deterministically but differently for each newly generated block (seeded).
+  return pickFromPool(pool, key) || pool[0];
+}
+
 
 function makeWeekPlan(profile, weekIndex) {
   const phase = phaseForWeek(weekIndex);
-  const baseI = baseIntensityFor(phase);
+  const baseI = microIntensityFor(profile, phase, weekIndex);
   const trans = transitionMultiplier(profile, weekIndex);
   const intensity = clamp(baseI * trans.intensity, 0.55, 0.92);
   const volFactor = clamp(volumeFactorFor(profile, phase) * trans.volume, 0.45, 1.10);
@@ -494,25 +587,25 @@ function makeWeekPlan(profile, weekIndex) {
   // Templates for main sessions (cycled across selected main days)
   const mainTemplates = [
     { title: 'Snatch Focus', kind: 'snatch', main: 'Snatch', liftKey: 'snatch', work: [
-      { name: 'Snatch', sets: Math.round(5 * volFactor), reps: 2, pct: intensity },
-      { name: 'Snatch Pull', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.10, 0.60, 0.95), liftKey: 'snatch' },
-      { name: 'Back Squat', sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity + 0.05, 0.55, 0.92), liftKey: 'bs' }
+      { name: chooseVariation('snatch', profile, weekIndex, phase, 'snatch_main').name, liftKey: 'snatch', sets: Math.round(5 * volFactor), reps: 2, pct: intensity },
+      { name: chooseVariation('pull_snatch', profile, weekIndex, phase, 'snatch_pull').name, liftKey: 'snatch', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.10, 0.60, 0.95), liftKey: 'snatch' },
+      { name: chooseVariation('bs', profile, weekIndex, phase, 'back_squat').name, liftKey: 'bs', sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity + 0.05, 0.55, 0.92), liftKey: 'bs' }
     ]},
     { title: 'Clean & Jerk Focus', kind: 'cj', main: 'Clean & Jerk', liftKey: 'cj', work: [
-      { name: 'Clean & Jerk', sets: Math.round(4 * volFactor), reps: 1, pct: clamp(intensity + 0.05, 0.60, 0.95) },
-      { name: 'Clean Pull', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.12, 0.60, 0.98), liftKey: 'cj' },
-      { name: 'Front Squat', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.92), liftKey: 'fs' }
+      { name: chooseVariation('cj', profile, weekIndex, phase, 'cj_main').name, liftKey: 'cj', sets: Math.round(4 * volFactor), reps: 1, pct: clamp(intensity + 0.05, 0.60, 0.95) },
+      { name: chooseVariation('pull_cj', profile, weekIndex, phase, 'clean_pull').name, liftKey: 'cj', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.12, 0.60, 0.98), liftKey: 'cj' },
+      { name: chooseVariation('fs', profile, weekIndex, phase, 'front_squat').name, liftKey: 'fs', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.92), liftKey: 'fs' }
     ]},
     { title: 'Strength + Positions', kind: 'strength', main: 'Back Squat', liftKey: 'bs', work: [
-      { name: 'Back Squat', sets: Math.round(5 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.95), liftKey: 'bs' },
-      { name: 'Power Snatch', sets: Math.round(4 * volFactor), reps: 2, pct: clamp(intensity - 0.02, 0.55, 0.90), liftKey: 'snatch' },
-      { name: (phase === 'intensification' ? 'Push Press' : 'Press'), sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) }
+      { name: chooseVariation('bs', profile, weekIndex, phase, 'back_squat_strength').name, liftKey: 'bs', sets: Math.round(5 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.95), liftKey: 'bs' },
+      { name: chooseVariation('snatch', profile, weekIndex, phase, 'snatch_secondary').name, liftKey: 'snatch', sets: Math.round(4 * volFactor), reps: 2, pct: clamp(intensity - 0.02, 0.55, 0.90), liftKey: 'snatch' },
+      { name: chooseVariation('press', profile, weekIndex, phase, 'press').name, liftKey: '', sets:ss'), sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) }
     ]}
   ];
 
   const accessoryTemplate = { title: 'Accessory + Core', kind: 'accessory', main: 'Accessory', liftKey: '', work: [
-    { name: 'Tempo Front Squat', sets: Math.round(3 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80), liftKey: 'fs' },
-    { name: 'RDL', sets: Math.round(3 * volFactor), reps: 8, pct: clamp(intensity - 0.20, 0.35, 0.75) },
+    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').name, liftKey: 'fs', sets: Math.round(3 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80), liftKey: 'fs' },
+    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').name, liftKey: '', sets: Math.round(3 * volFactor), reps: 8, pct: clamp(intensity - 0.20, 0.35, 0.75) },
     { name: 'Core + Mobility', sets: 1, reps: 1, pct: 0 }
   ]};
 
@@ -524,6 +617,21 @@ function makeWeekPlan(profile, weekIndex) {
   });
   accClean.sort((a,b)=>a-b).forEach((d) => sessions.push({ ...accessoryTemplate, dow: d }));
 
+
+  // Powerbuilding: keep Oly structure but add hypertrophy accessories to each main session.
+  if ((profile.programType || 'general') === 'powerbuilding') {
+    sessions.forEach((s, si) => {
+      if (s.kind === 'accessory') return;
+      const extra1 = chooseVariation('accessory', profile, weekIndex, phase, `pb_${si}_1`).name;
+      const extra2 = chooseVariation('accessory', profile, weekIndex, phase, `pb_${si}_2`).name;
+      const extraSets = clamp(Math.round(3 * volFactor), 2, 5);
+      s.work = [
+        ...s.work,
+        { name: extra1, liftKey: '', sets: extraSets, reps: 10, pct: 0 },
+        { name: extra2, liftKey: '', sets: extraSets, reps: 12, pct: 0 }
+      ];
+    });
+  }
   sessions.sort((a,b)=>a.dow-b.dow);
   const days = sessions.map(s => {
     const { dow, ...rest } = s;
@@ -563,12 +671,16 @@ function generateBlockFromSetup() {
 
   // Build block
   const blockLength = clamp(profile.blockLength, 4, 12);
+
+  const _seed = Date.now();
+  profile.lastBlockSeed = _seed;
   const weeks = [];
   for (let w = 0; w < blockLength; w++) {
     weeks.push(makeWeekPlan(profile, w));
   }
 
   state.currentBlock = {
+    seed: _seed,
     profileName: state.activeProfile,
     startDateISO: todayISO(),
     programType: profile.programType,
