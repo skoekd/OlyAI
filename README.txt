@@ -1,7 +1,9 @@
-LiftAI Powerbuilding v1
+LiftAI Powerbuilding v1 - Day Selection Fix
 
-Adds a new program type: Powerbuilding (Oly + Hypertrophy).
-- Keeps Oly main sessions (Snatch/CJ/Strength templates)
-- Adds 2 hypertrophy accessory exercises to EVERY main session automatically
-- Uses seeded variation so regenerated programs differ
-Deploy: replace index.html + app.js. Delete duplicates (app.js.js, index.html.html).
+Fix:
+- Setup main/accessory day multi-select now works (handlers bound on boot + UI sync).
+- Still prevents overlap between main and accessory days.
+- All workout buttons/dropdowns unaffected.
+
+Deploy:
+Replace index.html + app.js only. Delete any duplicates: app.js.js, index.html.html.

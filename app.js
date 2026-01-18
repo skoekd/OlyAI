@@ -723,6 +723,9 @@ function renderSetup() {
   if ($('setupCleanJerk')) $('setupCleanJerk').value = p.maxes?.cj ?? '';
   if ($('setupFrontSquat')) $('setupFrontSquat').value = p.maxes?.fs ?? '';
   if ($('setupBackSquat')) $('setupBackSquat').value = p.maxes?.bs ?? '';
+  // Keep day selectors in sync
+  syncDaySelectorUI();
+
 }
 
 function renderDashboard() {
@@ -1530,7 +1533,7 @@ function wireButtons() {
     ui.weekIndex = 0;
     saveState();
     showPage('Setup');
-  bindDaySelectorHandlers();
+  ensureDaySelectorsBound();
   });
 
   // Settings: Test AI Connection (keep functional even if AI is disabled)
@@ -1626,6 +1629,13 @@ function syncDaySelectorUI(){
     btn.classList.toggle('disabled', main.has(d));
   });
 }
+
+function ensureDaySelectorsBound(){
+  if (daySelectorBound) return;
+  daySelectorBound = true;
+  bindDaySelectorHandlers();
+}
+
 function bindDaySelectorHandlers(){
   const mainWrap = $('mainDaySelector');
   const accWrap  = $('accessoryDaySelector');
@@ -1670,7 +1680,7 @@ function bindDaySelectorHandlers(){
 
 function boot() {
   wireButtons();
-
+  ensureDaySelectorsBound();
   // default page
   showPage('Setup');
 
@@ -1680,5 +1690,7 @@ function boot() {
     ui.weekIndex = 0;
   }
 }
+
+let daySelectorBound = false;
 
 document.addEventListener('DOMContentLoaded', boot);
