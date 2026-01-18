@@ -44,6 +44,112 @@ function actionDelta(action) {
   }
 }
 
+// ---------------------------
+// Exercise swap system
+// ---------------------------
+// Each lift can be swapped within its "family" (snatch variants, CJ variants, pulls, squats, presses, accessories).
+// This supports injury management / preferences while keeping the program logic coherent.
+
+const SWAP_POOLS = {
+  snatch: [
+    { name: 'Snatch', liftKey: 'snatch' },
+    { name: 'Power Snatch', liftKey: 'snatch' },
+    { name: 'Hang Snatch (knee)', liftKey: 'snatch' },
+    { name: 'Hang Power Snatch', liftKey: 'snatch' },
+    { name: 'Block Snatch', liftKey: 'snatch' },
+    { name: 'Pause Snatch', liftKey: 'snatch' },
+    { name: 'Snatch Complex', liftKey: 'snatch' }
+  ],
+  cj: [
+    { name: 'Clean & Jerk', liftKey: 'cj' },
+    { name: 'Power Clean + Jerk', liftKey: 'cj' },
+    { name: 'Hang Clean + Jerk', liftKey: 'cj' },
+    { name: 'Clean + Push Jerk', liftKey: 'cj' },
+    { name: 'Clean + Power Jerk', liftKey: 'cj' },
+    { name: 'Jerk from Blocks', liftKey: 'cj' },
+    { name: 'Power Jerk from Rack', liftKey: 'cj' }
+  ],
+  pull_snatch: [
+    { name: 'Snatch Pull', liftKey: 'snatch' },
+    { name: 'Snatch High Pull', liftKey: 'snatch' },
+    { name: 'Deficit Snatch Pull', liftKey: 'snatch' },
+    { name: 'Halting Snatch Pull', liftKey: 'snatch' }
+  ],
+  pull_clean: [
+    { name: 'Clean Pull', liftKey: 'cj' },
+    { name: 'Clean High Pull', liftKey: 'cj' },
+    { name: 'Deficit Clean Pull', liftKey: 'cj' },
+    { name: 'Halting Clean Pull', liftKey: 'cj' }
+  ],
+  bs: [
+    { name: 'Back Squat', liftKey: 'bs' },
+    { name: 'Pause Back Squat', liftKey: 'bs' },
+    { name: 'Tempo Back Squat', liftKey: 'bs' }
+  ],
+  fs: [
+    { name: 'Front Squat', liftKey: 'fs' },
+    { name: 'Pause Front Squat', liftKey: 'fs' },
+    { name: 'Tempo Front Squat', liftKey: 'fs' }
+  ],
+  press: [
+    { name: 'Push Press', liftKey: '' },
+    { name: 'Strict Press', liftKey: '' },
+    { name: 'Behind-the-Neck Push Press', liftKey: '' },
+    { name: 'Jerk Dip + Drive', liftKey: '' }
+  ],
+  accessory: [
+    { name: 'RDL', liftKey: '' },
+    { name: 'Good Morning', liftKey: '' },
+    { name: 'Bulgarian Split Squat', liftKey: '' },
+    { name: 'Row', liftKey: '' },
+    { name: 'Pull-up', liftKey: '' },
+    { name: 'Plank', liftKey: '' },
+    { name: 'Back Extension', liftKey: '' }
+  ]
+};
+
+function inferSwapFamily(exName, liftKey) {
+  const n = String(exName || '').toLowerCase();
+  const lk = String(liftKey || '').toLowerCase();
+  if (n.includes('pull')) return (lk === 'snatch') ? 'pull_snatch' : 'pull_clean';
+  if (n.includes('squat')) return (n.includes('front') || lk === 'fs') ? 'fs' : 'bs';
+  if (n.includes('press') || n.includes('jerk dip')) return 'press';
+  if (n.includes('snatch')) return 'snatch';
+  if (n.includes('clean') || n.includes('jerk')) return 'cj';
+  return 'accessory';
+}
+
+function getSwapOptionsForExercise(ex, dayPlan) {
+  const lk = ex.liftKey || dayPlan.liftKey || '';
+  const family = inferSwapFamily(ex.name, lk);
+  const pool = SWAP_POOLS[family] ? [...SWAP_POOLS[family]] : [];
+
+  // Ensure the current exercise is always present as an option.
+  if (!pool.some(o => o.name === ex.name)) {
+    pool.unshift({ name: ex.name, liftKey: lk });
+  }
+
+  // Also ensure no duplicates and keep current first.
+  const uniq = [];
+  pool.forEach(o => {
+    if (!uniq.some(u => u.name === o.name)) uniq.push(o);
+  });
+  const currentIdx = uniq.findIndex(o => o.name === ex.name);
+  if (currentIdx > 0) {
+    const cur = uniq.splice(currentIdx, 1)[0];
+    uniq.unshift(cur);
+  }
+  return uniq;
+}
+
+function clearExerciseLogs(dayLog, exIndex) {
+  // Clear per-set logs and overrides for this exercise index.
+  Object.keys(dayLog).forEach((k) => {
+    if (k.startsWith(`${exIndex}:`)) delete dayLog[k];
+  });
+  if (dayLog.__exOverrides && dayLog.__exOverrides[exIndex]) delete dayLog.__exOverrides[exIndex];
+}
+
 function getAdjustedWorkingMax(profile, liftKey) {
   const base = (profile.workingMaxes && profile.workingMaxes[liftKey]) ? Number(profile.workingMaxes[liftKey]) : 0;
   const adj = (profile.liftAdjustments && Number(profile.liftAdjustments[liftKey])) ? Number(profile.liftAdjustments[liftKey]) : 0;
@@ -241,10 +347,6 @@ let ui = {
   currentPage: 'Setup',
   weekIndex: 0
 };
-
-let daySelectorBound = false;
-let workoutDetailBound = false;
-
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -605,7 +707,8 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
         <div class="card-title">${ex.name}</div>
         <div class="card-subtitle">${workSets}×${ex.reps}${ex.pct && liftKey ? ` • ${Math.round(ex.pct*100)}%` : ''}</div>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
+	      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+	        <select class="input small" data-role="swap" style="min-width:110px; max-width:160px;"></select>
         <button class="secondary small" data-role="minusSet">− Set</button>
         <button class="secondary small" data-role="plusSet">+ Set</button>
       </div>
@@ -630,6 +733,43 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
 
     head.querySelector('[data-role="minusSet"]')?.addEventListener('click', (e) => { e.preventDefault(); applySetCountChange(workSets - 1); });
     head.querySelector('[data-role="plusSet"]')?.addEventListener('click', (e) => { e.preventDefault(); applySetCountChange(workSets + 1); });
+
+	    // Swap exercise dropdown (available for EVERY lift in the session)
+	    const swapEl = head.querySelector('[data-role="swap"]');
+	    if (swapEl) {
+	      const options = getSwapOptionsForExercise(ex, dayPlan);
+	      swapEl.innerHTML = '';
+	      options.forEach(o => {
+	        const opt = document.createElement('option');
+	        opt.value = o.name;
+	        opt.textContent = o.name;
+	        swapEl.appendChild(opt);
+	      });
+	      swapEl.value = ex.name;
+	      swapEl.addEventListener('change', () => {
+	        const chosenName = String(swapEl.value || ex.name);
+	        if (!chosenName || chosenName === ex.name) return;
+
+	        // Find chosen definition (name + liftKey) within this exercise family
+	        const chosen = options.find(o => o.name === chosenName) || { name: chosenName, liftKey };
+
+	        // Update the underlying block so every view reflects the swap
+	        try {
+	          const wk = state.currentBlock?.weeks?.[weekIndex];
+	          const dy = wk?.days?.[dayIndex];
+	          if (dy && dy.work && dy.work[exIndex]) {
+	            dy.work[exIndex] = { ...dy.work[exIndex], name: chosen.name, liftKey: chosen.liftKey || dy.work[exIndex].liftKey };
+	          }
+
+	          // Clear logs/overrides for this exercise index to avoid mixing data across different movements
+	          clearExerciseLogs(dayLog, exIndex);
+	          persist();
+	          openWorkoutDetail(weekIndex, dayIndex, dy || dayPlan);
+	        } catch (err) {
+	          console.warn('Swap failed', err);
+	        }
+	      });
+	    }
 
     const table = document.createElement('table');
     table.className = 'set-table';
@@ -766,8 +906,6 @@ wEl.addEventListener('input', () => {
 }
 
 function bindWorkoutDetailControls() {
-  if (workoutDetailBound) return;
-  workoutDetailBound = true;
   $('btnCloseDetail')?.addEventListener('click', () => $('workoutDetail')?.classList.remove('show'));
   $('btnComplete')?.addEventListener('click', () => {
     const ctx = ui.detailContext;
@@ -831,12 +969,12 @@ function renderWorkout() {
     });
   }
 
-  // Progress = sessions completed this week / total scheduled sessions
+  // Progress = sessions completed this week / 4
   const completed = countCompletedForWeek(ui.weekIndex);
-  const totalSessions = Math.max(w?.days?.length || 0, 1);
-  const pct = Math.round((completed / totalSessions) * 100);
+  const pct = Math.round((completed / 4) * 100);
   if (weekProgress) weekProgress.style.width = `${pct}%`;
-// Calendar/day cards
+
+  // Calendar/day cards
   if (weekCalendar) {
     weekCalendar.innerHTML = '';
     w.days.forEach((day, dayIndex) => {
@@ -853,7 +991,7 @@ function renderWorkout() {
           <div class="mini-badge primary">${day.title}</div>
         </div>
         <div class="day-header-right">
-          <div class="day-stats">${getDaySetProgressText(ui.weekIndex, dayIndex, day, isDone)}</div>
+          <div class="day-stats">${isDone ? 'Completed' : 'Tap to view'}</div>
           <div class="expand-icon">▾</div>
         </div>
       `;
@@ -1297,7 +1435,15 @@ function wireButtons() {
    * These MUST have working buttons to satisfy “all buttons work”
    * even if the fresh workflow does not depend on them.
    ********************/
-$('btnExecExit')?.addEventListener('click', () => {
+  $('btnCloseDetail')?.addEventListener('click', () => {
+    $('workoutDetail')?.classList.remove('show');
+  });
+  $('btnComplete')?.addEventListener('click', () => {
+    // If opened from anywhere, just close + toast. Completion is handled in week cards.
+    $('workoutDetail')?.classList.remove('show');
+    notify('Session marked complete (use Week view buttons for logging)');
+  });
+  $('btnExecExit')?.addEventListener('click', () => {
     $('execOverlay')?.classList.remove('show');
   });
   $('btnExecPrev')?.addEventListener('click', () => notify('Execution mode is not used in this build.'));
@@ -1369,8 +1515,6 @@ function syncDaySelectorUI(){
   });
 }
 function bindDaySelectorHandlers(){
-  if (daySelectorBound) return;
-  daySelectorBound = true;
   const mainWrap = $('mainDaySelector');
   const accWrap  = $('accessoryDaySelector');
   if (!mainWrap || !accWrap) return;
@@ -1414,8 +1558,6 @@ function bindDaySelectorHandlers(){
 
 function boot() {
   wireButtons();
-  bindWorkoutDetailControls();
-  bindDaySelectorHandlers();
 
   // default page
   showPage('Setup');
