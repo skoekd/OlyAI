@@ -531,8 +531,20 @@ function microIntensityFor(profile, phase, weekIndex) {
 }
 
 function chooseVariation(family, profile, weekIndex, phase, slotKey) {
-  const pool = SWAP_POOLS[family] || [];
+  let pool = SWAP_POOLS[family] || [];
   if (pool.length === 0) return { name: slotKey, liftKey: '' };
+  
+  // Filter out block variations if user has includeBlocks set to false
+  const allowBlocks = (profile.includeBlocks === true || profile.includeBlocks === undefined);
+  if (!allowBlocks) {
+    pool = pool.filter(ex => {
+      const name = (ex.name || '').toLowerCase();
+      return !name.includes('block') && !name.includes('from blocks');
+    });
+    // If all exercises were filtered out, use original pool
+    if (pool.length === 0) pool = SWAP_POOLS[family];
+  }
+  
   const pt = (profile.programType || 'general');
   const mode = (profile.athleteMode || 'recreational');
   const preferSpecific = (mode === 'competition' || pt === 'competition');
@@ -722,6 +734,11 @@ function generateBlockFromSetup() {
   }
   profile.maxes = { snatch: sn, cj: cj, fs: fs, bs: bs, pushPress, strictPress };
   profile.workingMaxes = computeWorkingMaxes(profile.maxes);
+  
+  // Save updated profile before generating block
+  state.profiles[state.activeProfile] = profile;
+  saveState();
+  
   const blockLength = clamp(profile.blockLength, 4, 12);
   const _seed = Date.now();
   profile.lastBlockSeed = _seed;
