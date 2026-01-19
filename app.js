@@ -280,6 +280,7 @@ const DEFAULT_PROFILE = () => ({
   athleteMode: 'recreational',
   includeBlocks: true,
   volumePref: 'reduced',
+  duration: 75, // Session duration in minutes
   autoCut: true,
   age: null,
   trainingAge: 1,
@@ -626,8 +627,9 @@ function makeWeekPlan(profile, weekIndex) {
     sessions.push({ ...accessoryTemplate, dow: d });
   });
   
-  // POWERBUILDING: Research-based hypertrophy integration
+  // POWERBUILDING: Research-based hypertrophy integration (duration-aware)
   if ((profile.programType || 'general') === 'powerbuilding') {
+    const duration = profile.duration || 75;
     const hypSets = phase === 'accumulation' ? Math.round(3 * volFactor) : 
                     phase === 'intensification' ? Math.round(3 * volFactor) : 
                     2; // deload
@@ -639,43 +641,85 @@ function makeWeekPlan(profile, weekIndex) {
       if (s.kind === 'accessory') {
         // Full hypertrophy pump day (no Olympic lifts for recovery)
         s.title = 'Hypertrophy + Pump';
-        s.work = [
-          { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_acc_push`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_acc_pull`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh1`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh2`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_acc_quad`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_acc_post`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: 'Core Circuit', sets: 3, reps: 1, pct: 0, tag: 'core' }
-        ];
+        
+        if (duration >= 90) {
+          // 90+ minutes: Full pump day
+          s.work = [
+            { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_acc_push`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_acc_pull`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh1`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh2`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_acc_quad`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_acc_post`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: 'Core Circuit', sets: 3, reps: 1, pct: 0, tag: 'core' }
+          ];
+        } else {
+          // 60-75 minutes: Condensed accessory
+          s.work = [
+            { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_acc_push`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_acc_pull`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_acc_quad`).name, sets: hypSets, reps: 12, pct: 0, tag: 'hypertrophy' },
+            { name: 'Core Circuit', sets: 2, reps: 1, pct: 0, tag: 'core' }
+          ];
+        }
         return;
       }
       
-      // Add targeted hypertrophy blocks to main days (AFTER Olympic & strength work)
+      // Add targeted hypertrophy to main days (AFTER Olympic & strength work)
+      // Duration-aware: shorter sessions = fewer accessories
+      
       if (s.kind === 'snatch') {
-        // Upper body push/pull hypertrophy
-        s.work = [...s.work,
-          { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_sn_push`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_sn_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_sn_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_sn_arm`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
-        ];
+        // Snatch day + Upper hypertrophy
+        if (duration >= 90) {
+          // 90+ min: Full hypertrophy block
+          s.work = [...s.work,
+            { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_sn_push`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_sn_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_sn_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_sn_arm`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
+          ];
+        } else {
+          // 60-75 min: Condensed (2-3 exercises)
+          s.work = [...s.work,
+            { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_sn_push`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_sn_pull`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' }
+          ];
+        }
       } else if (s.kind === 'cj') {
-        // Back and arms hypertrophy
-        s.work = [...s.work,
-          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_cj_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_cj_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm1`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm2`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
-        ];
+        // C&J day + Back/Arms (pulls moved here)
+        if (duration >= 90) {
+          // 90+ min: Include pull + full hypertrophy
+          const pullExercise = chooseVariation('pull_clean', profile, weekIndex, phase, 'cj_pull_extra');
+          s.work = [...s.work,
+            { name: pullExercise.name, liftKey: pullExercise.liftKey, sets: Math.round(3 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.92) },
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_cj_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_cj_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm1`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
+          ];
+        } else {
+          // 60-75 min: Condensed
+          s.work = [...s.work,
+            { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_cj_pull`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm1`).name, sets: hypSets, reps: 12, pct: 0, tag: 'hypertrophy' }
+          ];
+        }
       } else if (s.kind === 'strength') {
-        // Lower body hypertrophy
-        s.work = [...s.work,
-          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post1`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post2`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
-          { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_st_quad`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
-          { name: 'Calf Raises', sets: 4, reps: 15, pct: 0, tag: 'hypertrophy' }
-        ];
+        // Strength day + Leg hypertrophy
+        if (duration >= 90) {
+          // 90+ min: Full leg work
+          s.work = [...s.work,
+            { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post1`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post2`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+            { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_st_quad`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+            { name: 'Calf Raises', sets: 4, reps: 15, pct: 0, tag: 'hypertrophy' }
+          ];
+        } else {
+          // 60-75 min: Condensed (1-2 exercises)
+          s.work = [...s.work,
+            { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post1`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
+            { name: 'Calf Raises', sets: 3, reps: 15, pct: 0, tag: 'hypertrophy' }
+          ];
+        }
       }
     });
   }
@@ -698,6 +742,7 @@ function generateBlockFromSetup() {
   profile.athleteMode = ($('setupAthleteMode')?.value) || 'recreational';
   profile.includeBlocks = ($('setupIncludeBlocks')?.value) === 'yes';
   profile.volumePref = ($('setupVolumePref')?.value) || 'reduced';
+  profile.duration = Number($('setupDuration')?.value) || 75; // Session duration in minutes
   profile.autoCut = ($('setupAutoCut')?.value) !== 'no';
   profile.age = Number($('setupAge')?.value) || null;
   profile.trainingAge = Number($('setupTrainingAge')?.value) || 1;
@@ -1139,6 +1184,7 @@ function renderSetup() {
   if ($('setupAthleteMode')) $('setupAthleteMode').value = p.athleteMode || 'recreational';
   if ($('setupIncludeBlocks')) $('setupIncludeBlocks').value = p.includeBlocks ? 'yes' : 'no';
   if ($('setupVolumePref')) $('setupVolumePref').value = p.volumePref || 'reduced';
+  if ($('setupDuration')) $('setupDuration').value = String(p.duration || 75);
   if ($('setupAutoCut')) $('setupAutoCut').value = p.autoCut !== false ? 'yes' : 'no';
   if ($('setupAge')) $('setupAge').value = p.age || '';
   if ($('setupTrainingAge')) $('setupTrainingAge').value = String(p.trainingAge || 1);
