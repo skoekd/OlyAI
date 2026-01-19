@@ -439,12 +439,69 @@ function blockSeed() {
   return (state.currentBlock && state.currentBlock.seed) ? Number(state.currentBlock.seed) : 0;
 }
 
+const HYPERTROPHY_POOLS = {
+  upperPush: [
+    { name: 'Dumbbell Bench Press' },
+    { name: 'Incline Dumbbell Press' },
+    { name: 'Dips' },
+    { name: 'Overhead Dumbbell Press' },
+    { name: 'Landmine Press' }
+  ],
+  upperPull: [
+    { name: 'Barbell Row' },
+    { name: 'Pull-ups' },
+    { name: 'Lat Pulldown' },
+    { name: 'Cable Row' },
+    { name: 'T-Bar Row' },
+    { name: 'Single-Arm Dumbbell Row' }
+  ],
+  shoulders: [
+    { name: 'Lateral Raise' },
+    { name: 'Face Pull' },
+    { name: 'Rear Delt Fly' },
+    { name: 'Front Raise' },
+    { name: 'Cable Lateral Raise' }
+  ],
+  arms: [
+    { name: 'Barbell Curl' },
+    { name: 'Hammer Curl' },
+    { name: 'Tricep Extension' },
+    { name: 'Tricep Pushdown' },
+    { name: 'Dumbbell Curl' },
+    { name: 'Close-Grip Push-up' }
+  ],
+  lowerPosterior: [
+    { name: 'Romanian Deadlift' },
+    { name: 'Leg Curl' },
+    { name: 'Good Morning' },
+    { name: 'Glute Bridge' },
+    { name: 'Nordic Curl' }
+  ],
+  lowerQuad: [
+    { name: 'Bulgarian Split Squat' },
+    { name: 'Leg Press' },
+    { name: 'Walking Lunge' },
+    { name: 'Leg Extension' },
+    { name: 'Step-up' }
+  ]
+};
+
+
 function pickFromPool(pool, key, weekIndex) {
   if (!pool || pool.length === 0) return null;
   const h = hash32(String(key) + '|w' + String(weekIndex));
   const idx = (h % (pool.length * 7)) % pool.length;
   return pool[idx];
 }
+
+function chooseHypertrophyExercise(poolName, profile, weekIndex, slotKey) {
+  const pool = HYPERTROPHY_POOLS[poolName] || [];
+  if (pool.length === 0) return { name: poolName };
+  const seed = blockSeed() || 0;
+  const key = `${seed}|hyp|${poolName}|${slotKey}|${profile.programType || 'general'}`;
+  return pickFromPool(pool, key, weekIndex) || pool[0];
+}
+
 
 function microIntensityFor(profile, phase, weekIndex) {
   const w = weekIndex % 4;
@@ -488,6 +545,31 @@ function chooseVariation(family, profile, weekIndex, phase, slotKey) {
   return pickFromPool(pool, key, weekIndex) || pool[0];
 }
 
+function chooseVariationExcluding(family, profile, weekIndex, phase, slotKey, excludeNames = []) {
+  const pool = SWAP_POOLS[family] || [];
+  if (pool.length === 0) return { name: slotKey, liftKey: '' };
+  
+  // Filter out excluded exercises
+  const availablePool = pool.filter(ex => !excludeNames.includes(ex.name));
+  
+  // If filtering removed everything, use full pool as fallback
+  const finalPool = availablePool.length > 0 ? availablePool : pool;
+  
+  // Use same selection logic as chooseVariation but with filtered pool
+  const pt = (profile.programType || 'general');
+  const mode = (profile.athleteMode || 'recreational');
+  const preferSpecific = (mode === 'competition' || pt === 'competition');
+  const seed = blockSeed() || Number(profile.lastBlockSeed || 0) || 0;
+  const key = `${seed}|${family}|${slotKey}|${phase}|${pt}|${mode}`;
+  
+  if (preferSpecific && (phase === 'intensification')) {
+    const h = hash32(key + '|w' + weekIndex);
+    if ((h % 10) < 7) return finalPool[0];
+  }
+  
+  return pickFromPool(finalPool, key, weekIndex) || finalPool[0];
+}
+
 function makeWeekPlan(profile, weekIndex) {
   const phase = phaseForWeek(weekIndex);
   const baseI = microIntensityFor(profile, phase, weekIndex);
@@ -515,9 +597,12 @@ function makeWeekPlan(profile, weekIndex) {
       { name: chooseVariation('press', profile, weekIndex, phase, 'press').name, liftKey: chooseVariation('press', profile, weekIndex, phase, 'press').liftKey, sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) }
     ]}
   ];
+  // Build accessory template with no duplicates
+  const acc1 = chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1');
+  const acc2 = chooseVariationExcluding('accessory', profile, weekIndex, phase, 'accessory_2', [acc1.name]);
   const accessoryTemplate = { title: 'Accessory + Core', kind: 'accessory', main: 'Accessory', liftKey: '', work: [
-    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').name, liftKey: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').liftKey, recommendedPct: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').recommendedPct || 0, description: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').description || '', sets: Math.round(3 * volFactor), reps: 5, pct: 0 },
-    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').name, liftKey: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').liftKey, recommendedPct: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').recommendedPct || 0, description: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').description || '', sets: Math.round(3 * volFactor), reps: 8, pct: 0 },
+    { name: acc1.name, liftKey: acc1.liftKey, recommendedPct: acc1.recommendedPct || 0, description: acc1.description || '', sets: Math.round(3 * volFactor), reps: 5, pct: 0 },
+    { name: acc2.name, liftKey: acc2.liftKey, recommendedPct: acc2.recommendedPct || 0, description: acc2.description || '', sets: Math.round(3 * volFactor), reps: 8, pct: 0 },
     { name: 'Core + Mobility', sets: 1, reps: 1, pct: 0 }
   ]};
   const sessions = [];
@@ -528,16 +613,58 @@ function makeWeekPlan(profile, weekIndex) {
   accClean.sort((a, b) => a - b).forEach((d) => {
     sessions.push({ ...accessoryTemplate, dow: d });
   });
+  
+  // POWERBUILDING: Research-based hypertrophy integration
   if ((profile.programType || 'general') === 'powerbuilding') {
+    const hypSets = phase === 'accumulation' ? Math.round(3 * volFactor) : 
+                    phase === 'intensification' ? Math.round(3 * volFactor) : 
+                    2; // deload
+    const hypReps = phase === 'accumulation' ? 12 : 
+                    phase === 'intensification' ? 8 : 
+                    8; // deload
+    
     sessions.forEach((s, si) => {
-      if (s.kind === 'accessory') return;
-      const extra1 = chooseVariation('accessory', profile, weekIndex, phase, `pb_${si}_1`).name;
-      const extra2 = chooseVariation('accessory', profile, weekIndex, phase, `pb_${si}_2`).name;
-      const extraSets = clamp(Math.round(3 * volFactor), 2, 5);
-      s.work = [...s.work,
-        { name: extra1, liftKey: '', sets: extraSets, reps: 10, pct: 0 },
-        { name: extra2, liftKey: '', sets: extraSets, reps: 12, pct: 0 }
-      ];
+      if (s.kind === 'accessory') {
+        // Full hypertrophy pump day (no Olympic lifts for recovery)
+        s.title = 'Hypertrophy + Pump';
+        s.work = [
+          { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_acc_push`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_acc_pull`).name, sets: hypSets + 1, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh1`).name, sets: hypSets, reps: 10, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_acc_sh2`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_acc_quad`).name, sets: hypSets, reps: 15, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_acc_post`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: 'Core Circuit', sets: 3, reps: 1, pct: 0, tag: 'core' }
+        ];
+        return;
+      }
+      
+      // Add targeted hypertrophy blocks to main days (AFTER Olympic & strength work)
+      if (s.kind === 'snatch') {
+        // Upper body push/pull hypertrophy
+        s.work = [...s.work,
+          { name: chooseHypertrophyExercise('upperPush', profile, weekIndex, `hyp_sn_push`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_sn_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_sn_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_sn_arm`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
+        ];
+      } else if (s.kind === 'cj') {
+        // Back and arms hypertrophy
+        s.work = [...s.work,
+          { name: chooseHypertrophyExercise('upperPull', profile, weekIndex, `hyp_cj_pull`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('shoulders', profile, weekIndex, `hyp_cj_sh`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm1`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('arms', profile, weekIndex, `hyp_cj_arm2`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' }
+        ];
+      } else if (s.kind === 'strength') {
+        // Lower body hypertrophy
+        s.work = [...s.work,
+          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post1`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('lowerPosterior', profile, weekIndex, `hyp_st_post2`).name, sets: hypSets, reps: hypReps, pct: 0, tag: 'hypertrophy' },
+          { name: chooseHypertrophyExercise('lowerQuad', profile, weekIndex, `hyp_st_quad`).name, sets: hypSets, reps: hypReps - 2, pct: 0, tag: 'hypertrophy' },
+          { name: 'Calf Raises', sets: 4, reps: 15, pct: 0, tag: 'hypertrophy' }
+        ];
+      }
     });
   }
   sessions.sort((a, b) => a.dow - b.dow);
