@@ -137,19 +137,19 @@ const SWAP_POOLS = {
     { name: 'Tempo Front Squat', liftKey: 'fs' }
   ],
   press: [
-    { name: 'Push Press', liftKey: '' },
-    { name: 'Strict Press', liftKey: '' },
-    { name: 'Behind-the-Neck Push Press', liftKey: '' },
-    { name: 'Jerk Dip + Drive', liftKey: '' }
+    { name: 'Push Press', liftKey: 'pushPress' },
+    { name: 'Strict Press', liftKey: 'strictPress' },
+    { name: 'Behind-the-Neck Push Press', liftKey: 'pushPress' },
+    { name: 'Jerk Dip + Drive', liftKey: 'cj' }
   ],
   accessory: [
-    { name: 'RDL', liftKey: '' },
-    { name: 'Good Morning', liftKey: '' },
-    { name: 'Bulgarian Split Squat', liftKey: '' },
-    { name: 'Row', liftKey: '' },
-    { name: 'Pull-up', liftKey: '' },
-    { name: 'Plank', liftKey: '' },
-    { name: 'Back Extension', liftKey: '' }
+    { name: 'RDL', liftKey: 'bs', recommendedPct: 0.60, description: '~60% of Back Squat' },
+    { name: 'Good Morning', liftKey: 'bs', recommendedPct: 0.50, description: '~50% of Back Squat' },
+    { name: 'Bulgarian Split Squat', liftKey: 'bs', recommendedPct: 0.55, description: '~55% of Back Squat' },
+    { name: 'Row', liftKey: 'bs', recommendedPct: 0.30, description: '~30% of Back Squat' },
+    { name: 'Pull-up', liftKey: '', recommendedPct: 0, description: 'Bodyweight or add load' },
+    { name: 'Plank', liftKey: '', recommendedPct: 0, description: 'Bodyweight hold' },
+    { name: 'Back Extension', liftKey: 'bs', recommendedPct: 0.40, description: '~40% of Back Squat' }
   ]
 };
 
@@ -294,9 +294,9 @@ const DEFAULT_PROFILE = () => ({
   accessoryDays: [7],
   aiEnabled: true,
   aiModel: '',
-  maxes: { snatch: 80, cj: 100, fs: 130, bs: 150 },
-  workingMaxes: { snatch: 72, cj: 90, fs: 117, bs: 135 },
-  liftAdjustments: { snatch: 0, cj: 0, fs: 0, bs: 0 },
+  maxes: { snatch: 80, cj: 100, fs: 130, bs: 150, pushPress: 0, strictPress: 0 },
+  workingMaxes: { snatch: 72, cj: 90, fs: 117, bs: 135, pushPress: 0, strictPress: 0 },
+  liftAdjustments: { snatch: 0, cj: 0, fs: 0, bs: 0, pushPress: 0, strictPress: 0 },
   readinessLog: []
 });
 
@@ -394,7 +394,9 @@ function computeWorkingMaxes(maxes) {
     snatch: roundTo((Number(maxes.snatch) || 0) * 0.9, 0.5),
     cj: roundTo((Number(maxes.cj) || 0) * 0.9, 0.5),
     fs: roundTo((Number(maxes.fs) || 0) * 0.9, 0.5),
-    bs: roundTo((Number(maxes.bs) || 0) * 0.9, 0.5)
+    bs: roundTo((Number(maxes.bs) || 0) * 0.9, 0.5),
+    pushPress: roundTo((Number(maxes.pushPress) || 0) * 0.9, 0.5),
+    strictPress: roundTo((Number(maxes.strictPress) || 0) * 0.9, 0.5)
   };
 }
 
@@ -510,12 +512,12 @@ function makeWeekPlan(profile, weekIndex) {
     { title: 'Strength + Positions', kind: 'strength', main: 'Back Squat', liftKey: 'bs', work: [
       { name: chooseVariation('bs', profile, weekIndex, phase, 'back_squat_strength').name, liftKey: 'bs', sets: Math.round(5 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.95) },
       { name: chooseVariation('snatch', profile, weekIndex, phase, 'snatch_secondary').name, liftKey: 'snatch', sets: Math.round(4 * volFactor), reps: 2, pct: clamp(intensity - 0.02, 0.55, 0.90) },
-      { name: chooseVariation('press', profile, weekIndex, phase, 'press').name, liftKey: '', sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) }
+      { name: chooseVariation('press', profile, weekIndex, phase, 'press').name, liftKey: chooseVariation('press', profile, weekIndex, phase, 'press').liftKey, sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) }
     ]}
   ];
   const accessoryTemplate = { title: 'Accessory + Core', kind: 'accessory', main: 'Accessory', liftKey: '', work: [
-    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').name, liftKey: 'fs', sets: Math.round(3 * volFactor), reps: 5, pct: clamp(intensity - 0.12, 0.45, 0.80) },
-    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').name, liftKey: '', sets: Math.round(3 * volFactor), reps: 8, pct: clamp(intensity - 0.20, 0.35, 0.75) },
+    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').name, liftKey: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').liftKey, recommendedPct: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').recommendedPct || 0, description: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1').description || '', sets: Math.round(3 * volFactor), reps: 5, pct: 0 },
+    { name: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').name, liftKey: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').liftKey, recommendedPct: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').recommendedPct || 0, description: chooseVariation('accessory', profile, weekIndex, phase, 'accessory_2').description || '', sets: Math.round(3 * volFactor), reps: 8, pct: 0 },
     { name: 'Core + Mobility', sets: 1, reps: 1, pct: 0 }
   ]};
   const sessions = [];
@@ -585,11 +587,13 @@ function generateBlockFromSetup() {
   const cj = Number($('setupCleanJerk')?.value);
   const fs = Number($('setupFrontSquat')?.value);
   const bs = Number($('setupBackSquat')?.value);
+  const pushPress = Number($('setupPushPress')?.value) || 0;
+  const strictPress = Number($('setupStrictPress')?.value) || 0;
   if ([sn, cj, fs, bs].some(v => !Number.isFinite(v) || v <= 0)) {
-    alert('Please enter all four 1RM values.');
+    alert('Please enter all four main 1RM values (Snatch, C&J, Front Squat, Back Squat).');
     return;
   }
-  profile.maxes = { snatch: sn, cj: cj, fs: fs, bs: bs };
+  profile.maxes = { snatch: sn, cj: cj, fs: fs, bs: bs, pushPress, strictPress };
   profile.workingMaxes = computeWorkingMaxes(profile.maxes);
   const blockLength = clamp(profile.blockLength, 4, 12);
   const _seed = Date.now();
@@ -614,6 +618,20 @@ function generateBlockFromSetup() {
 
 function getAdjustedWorkingMax(profile, liftKey) {
   const base = (profile.workingMaxes && profile.workingMaxes[liftKey]) ? Number(profile.workingMaxes[liftKey]) : 0;
+  
+  // If press maxes not entered, estimate from C&J
+  if (!base && (liftKey === 'pushPress' || liftKey === 'strictPress')) {
+    const cjMax = profile.workingMaxes?.cj || 0;
+    if (cjMax > 0) {
+      // Push Press ≈ 70% of C&J, Strict Press ≈ 55% of C&J
+      const ratio = liftKey === 'pushPress' ? 0.70 : 0.55;
+      const estimated = roundTo(cjMax * ratio, profile.units === 'kg' ? 0.5 : 1);
+      const adj = (profile.liftAdjustments && Number(profile.liftAdjustments[liftKey])) ? Number(profile.liftAdjustments[liftKey]) : 0;
+      const capped = clamp(adj, -0.05, 0.05);
+      return estimated * (1 + capped);
+    }
+  }
+  
   const adj = (profile.liftAdjustments && Number(profile.liftAdjustments[liftKey])) ? Number(profile.liftAdjustments[liftKey]) : 0;
   const capped = clamp(adj, -0.05, 0.05);
   return base ? (base * (1 + capped)) : 0;
@@ -703,10 +721,22 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
     head.className = 'flex';
     head.style.justifyContent = 'space-between';
     head.style.alignItems = 'center';
+    
+    // Calculate recommendation for accessories
+    let recommendationText = '';
+    if (ex.recommendedPct && ex.recommendedPct > 0 && ex.liftKey) {
+      const baseMax = getAdjustedWorkingMax(p, ex.liftKey);
+      const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 0.5 : 1) : 0;
+      recommendationText = recWeight > 0 ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description} (~${recWeight}${p.units || 'kg'})</div>` : (ex.description ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>` : '');
+    } else if (ex.description) {
+      recommendationText = `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>`;
+    }
+    
     head.innerHTML = `
       <div>
         <div class="card-title">${ex.name}</div>
         <div class="card-subtitle">${workSets}×${ex.reps}${ex.pct && liftKey ? ` • ${Math.round(ex.pct*100)}%` : ''}</div>
+        ${recommendationText}
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
         <select class="quick-swap" data-role="swap"></select>
@@ -1000,6 +1030,8 @@ function renderSetup() {
   if ($('setupCleanJerk')) $('setupCleanJerk').value = p.maxes?.cj ?? '';
   if ($('setupFrontSquat')) $('setupFrontSquat').value = p.maxes?.fs ?? '';
   if ($('setupBackSquat')) $('setupBackSquat').value = p.maxes?.bs ?? '';
+  if ($('setupPushPress')) $('setupPushPress').value = p.maxes?.pushPress || '';
+  if ($('setupStrictPress')) $('setupStrictPress').value = p.maxes?.strictPress || '';
   if (!Array.isArray(p.mainDays)) p.mainDays = [2, 4, 6];
   if (!Array.isArray(p.accessoryDays)) p.accessoryDays = [7];
   syncDaySelectorUI();
@@ -1422,11 +1454,13 @@ function wireButtons() {
   });
   $('btnGenerateBlock')?.addEventListener('click', generateBlockFromSetup);
   $('btnDemo')?.addEventListener('click', () => {
-    const demo = { snatch: 80, cj: 100, fs: 130, bs: 150 };
+    const demo = { snatch: 80, cj: 100, fs: 130, bs: 150, pushPress: 70, strictPress: 55 };
     $('setupSnatch').value = demo.snatch;
     $('setupCleanJerk').value = demo.cj;
     $('setupFrontSquat').value = demo.fs;
     $('setupBackSquat').value = demo.bs;
+    $('setupPushPress').value = demo.pushPress;
+    $('setupStrictPress').value = demo.strictPress;
     notify('Demo maxes loaded');
   });
   $('btnGoWorkout')?.addEventListener('click', () => showPage('Workout'));
