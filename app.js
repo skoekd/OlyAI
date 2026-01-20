@@ -826,10 +826,47 @@ function generateBlockFromSetup() {
     blockLength,
     weeks
   };
+  
+  // Save entire block to history
+  state.blockHistory = state.blockHistory || [];
+  const blockHistoryEntry = {
+    id: `${state.activeProfile}_${_seed}`,
+    profileName: state.activeProfile,
+    startDateISO: todayISO(),
+    programType: profile.programType,
+    blockLength,
+    blockSeed: _seed,
+    units: profile.units,
+    maxes: { ...profile.maxes },
+    weeks: weeks.map((week, weekIndex) => ({
+      weekIndex,
+      phase: week.phase,
+      days: week.days.map((day, dayIndex) => ({
+        dayIndex,
+        title: day.title,
+        dow: day.dow,
+        completed: false,
+        completedDate: null,
+        exercises: day.work.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          prescribedWeight: ex.pct && ex.liftKey ? 
+            roundTo((profile.workingMaxes[ex.liftKey] || 0) * ex.pct, profile.units === 'kg' ? 0.5 : 1) : null,
+          prescribedPct: ex.pct ? Math.round(ex.pct * 100) : null,
+          liftKey: ex.liftKey || '',
+          actualSets: [] // Will be filled when completed
+        }))
+      }))
+    }))
+  };
+  state.blockHistory.unshift(blockHistoryEntry);
+  
   ui.weekIndex = 0;
   saveState();
   showPage('Dashboard');
   notify('Training block generated');
+  renderHistory();
 }
 
 function getAdjustedWorkingMax(profile, liftKey) {
@@ -1465,22 +1502,157 @@ function renderWorkout() {
 function renderHistory() {
   const list = $('historyList');
   if (!list) return;
-  const items = (state.history || []).slice().sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || ''));
-  if (!items.length) {
-    list.innerHTML = `<div class="card" style="background:rgba(17,24,39,.5)"><div class="card-title">No history yet</div><div class="card-subtitle">Complete a session to see it here.</div></div>`;
+  
+  const blocks = (state.blockHistory || []).slice();
+  if (!blocks.length) {
+    list.innerHTML = `<div class="card" style="background:rgba(17,24,39,.5)"><div class="card-title">No history yet</div><div class="card-subtitle">Generate a training block to see it here.</div></div>`;
     return;
   }
+  
   list.innerHTML = '';
-  items.forEach((h) => {
+  
+  blocks.forEach((block) => {
     const card = document.createElement('div');
     card.className = 'card';
+    card.style.cursor = 'pointer';
+    
+    const completedDays = block.weeks.reduce((sum, week) => 
+      sum + week.days.filter(d => d.completed).length, 0);
+    const totalDays = block.weeks.reduce((sum, week) => sum + week.days.length, 0);
+    const progressPct = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
+    
     card.innerHTML = `
-      <div class="card-title">${h.title || 'Session'}</div>
-      <div class="card-subtitle">${h.dateISO} • Week ${Number(h.weekIndex) + 1} • Day ${Number(h.dayIndex) + 1}</div>
-      <div style="margin-top:10px;color:var(--text-dim);font-size:13px">${renderSessionSummary(h.session)}</div>
+      <div class="card-title">${block.programType || 'General'} Block</div>
+      <div class="card-subtitle">${block.startDateISO} • ${block.blockLength} weeks • ${completedDays}/${totalDays} sessions completed</div>
+      <div style="margin-top:8px;background:rgba(255,255,255,0.1);border-radius:8px;height:6px;overflow:hidden">
+        <div style="width:${progressPct}%;height:100%;background:var(--primary);transition:width 0.3s"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn-mini primary" data-action="view" style="flex:1">View Details</button>
+        <button class="btn-mini secondary" data-action="export" style="flex:1">Export</button>
+        <button class="btn-mini danger" data-action="delete" style="flex:0 0 auto">Delete</button>
+      </div>
     `;
+    
+    // View details
+    card.querySelector('[data-action="view"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showBlockDetails(block);
+    });
+    
+    // Export
+    card.querySelector('[data-action="export"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportBlock(block);
+    });
+    
+    // Delete
+    card.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete this ${block.blockLength}-week block?`)) {
+        state.blockHistory = state.blockHistory.filter(b => b.id !== block.id);
+        saveState();
+        renderHistory();
+        notify('Block deleted');
+      }
+    });
+    
     list.appendChild(card);
   });
+}
+
+function showBlockDetails(block) {
+  let html = `
+    <div style="max-height:70vh;overflow-y:auto;padding:20px">
+      <h3 style="margin-top:0">${block.programType || 'General'} Block</h3>
+      <p style="color:var(--text-dim);margin-bottom:20px">
+        Started: ${block.startDateISO}<br>
+        Duration: ${block.blockLength} weeks<br>
+        Units: ${block.units || 'kg'}
+      </p>
+  `;
+  
+  block.weeks.forEach((week, weekIdx) => {
+    html += `
+      <div style="margin-bottom:24px;padding:16px;background:rgba(255,255,255,0.05);border-radius:8px">
+        <h4 style="margin:0 0 12px 0;color:var(--primary)">Week ${weekIdx + 1} - ${week.phase}</h4>
+    `;
+    
+    week.days.forEach((day, dayIdx) => {
+      const statusColor = day.completed ? '#10b981' : '#6b7280';
+      const statusText = day.completed ? `✓ Completed ${day.completedDate}` : 'Not completed';
+      
+      html += `
+        <div style="margin-bottom:16px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border-left:3px solid ${statusColor}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <strong>${day.title}</strong>
+            <span style="font-size:12px;color:${statusColor}">${statusText}</span>
+          </div>
+      `;
+      
+      day.exercises.forEach((ex, exIdx) => {
+        html += `<div style="margin:6px 0;font-size:13px;color:var(--text-dim)">
+          ${ex.name}: ${ex.sets}×${ex.reps}${ex.prescribedWeight ? ` @ ${ex.prescribedWeight} ${block.units} (${ex.prescribedPct}%)` : ''}
+        `;
+        
+        if (day.completed && ex.actualSets && ex.actualSets.length > 0) {
+          const workSets = ex.actualSets.filter(s => s.tag === 'work' && s.weight);
+          if (workSets.length > 0) {
+            const weights = workSets.map(s => s.weight).filter(w => w);
+            if (weights.length > 0) {
+              const avgWeight = Math.round(weights.reduce((a, b) => Number(a) + Number(b), 0) / weights.length);
+              html += `<br><span style="color:#10b981">→ Actual: ${avgWeight} ${block.units} avg</span>`;
+            }
+          }
+        }
+        
+        html += `</div>`;
+      });
+      
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+  });
+  
+  html += `</div>`;
+  
+  openModal('Block Details', '', html);
+}
+
+function exportBlock(block) {
+  let csv = 'Week,Day,Exercise,Prescribed Sets,Prescribed Reps,Prescribed Weight,Prescribed %,Completed,Actual Sets\n';
+  
+  block.weeks.forEach((week, weekIdx) => {
+    week.days.forEach((day) => {
+      day.exercises.forEach((ex) => {
+        const prescWeight = ex.prescribedWeight || '';
+        const prescPct = ex.prescribedPct || '';
+        const completed = day.completed ? 'Yes' : 'No';
+        
+        let actualSetsStr = '';
+        if (day.completed && ex.actualSets) {
+          const workSets = ex.actualSets.filter(s => s.tag === 'work');
+          actualSetsStr = workSets.map(s => 
+            `${s.weight || '-'}×${s.reps || '-'}${s.rpe ? `@${s.rpe}` : ''}`
+          ).join('; ');
+        }
+        
+        csv += `${weekIdx + 1},${day.title},"${ex.name}",${ex.sets},${ex.reps},${prescWeight},${prescPct},${completed},"${actualSetsStr}"\n`;
+      });
+    });
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `LiftAI_${block.programType}_${block.startDateISO}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  notify('Block exported');
 }
 
 function renderSessionSummary(session) {
@@ -1582,6 +1754,40 @@ function completeDay(weekIndex, dayIndex, dayPlan) {
     const next = clamp(prev + deltas[liftKey], -0.05, 0.05);
     p.liftAdjustments[liftKey] = next;
   });
+  
+  // Update block history with completed session data
+  state.blockHistory = state.blockHistory || [];
+  const currentBlockId = `${state.activeProfile}_${state.currentBlock?.seed}`;
+  const blockEntry = state.blockHistory.find(b => b.id === currentBlockId);
+  
+  if (blockEntry && blockEntry.weeks[weekIndex] && blockEntry.weeks[weekIndex].days[dayIndex]) {
+    const dayEntry = blockEntry.weeks[weekIndex].days[dayIndex];
+    dayEntry.completed = true;
+    dayEntry.completedDate = todayISO();
+    
+    // Save actual performance data
+    dayEntry.exercises.forEach((ex, exIndex) => {
+      const scheme = buildSetScheme(dayPlan.work[exIndex], ex.liftKey, p);
+      const actualSets = [];
+      
+      scheme.forEach((s, setIndex) => {
+        const recKey = `${exIndex}:${setIndex}`;
+        const rec = dayLog[recKey] || {};
+        actualSets.push({
+          setNumber: setIndex + 1,
+          tag: s.tag,
+          weight: rec.weight || null,
+          reps: rec.reps || null,
+          rpe: rec.rpe || null,
+          action: rec.action || null
+        });
+      });
+      
+      ex.actualSets = actualSets;
+    });
+  }
+  
+  // Keep old history format for backward compatibility (for now)
   state.completedDays = state.completedDays || {};
   state.completedDays[`${state.activeProfile}|w${weekIndex}|d${dayIndex}`] = true;
   state.history = state.history || [];
@@ -1593,6 +1799,7 @@ function completeDay(weekIndex, dayIndex, dayPlan) {
     title: dayPlan.title,
     session
   });
+  
   saveState();
   renderWorkout();
   renderHistory();
