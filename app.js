@@ -278,7 +278,7 @@ window.updateAutoCalcDisplays = function updateAutoCalcDisplays() {
     const display = $(displayId);
     
     if (field && display && config.base > 0) {
-      const autoValue = roundTo(config.base * config.ratio, 0.5);
+      const autoValue = roundTo(config.base * config.ratio, 1);
       const hasCustom = field.value && Number(field.value) > 0;
       
       if (hasCustom) {
@@ -460,12 +460,12 @@ function showPage(pageName) {
 
 function computeWorkingMaxes(maxes) {
   return {
-    snatch: roundTo((Number(maxes.snatch) || 0) * 0.9, 0.5),
-    cj: roundTo((Number(maxes.cj) || 0) * 0.9, 0.5),
-    fs: roundTo((Number(maxes.fs) || 0) * 0.9, 0.5),
-    bs: roundTo((Number(maxes.bs) || 0) * 0.9, 0.5),
-    pushPress: roundTo((Number(maxes.pushPress) || 0) * 0.9, 0.5),
-    strictPress: roundTo((Number(maxes.strictPress) || 0) * 0.9, 0.5)
+    snatch: roundTo((Number(maxes.snatch) || 0) * 0.9, 1),
+    cj: roundTo((Number(maxes.cj) || 0) * 0.9, 1),
+    fs: roundTo((Number(maxes.fs) || 0) * 0.9, 1),
+    bs: roundTo((Number(maxes.bs) || 0) * 0.9, 1),
+    pushPress: roundTo((Number(maxes.pushPress) || 0) * 0.9, 1),
+    strictPress: roundTo((Number(maxes.strictPress) || 0) * 0.9, 1)
   };
 }
 
@@ -1012,7 +1012,7 @@ function generateBlockFromSetup() {
           sets: ex.sets,
           reps: ex.reps,
           prescribedWeight: ex.pct && ex.liftKey ? 
-            roundTo(getBaseForExercise(ex.name, ex.liftKey, profile) * ex.pct, profile.units === 'kg' ? 0.5 : 1) : null,
+            roundTo(getBaseForExercise(ex.name, ex.liftKey, profile) * ex.pct, profile.units === 'kg' ? 1 : 1) : null,
           prescribedPct: ex.pct ? Math.round(ex.pct * 100) : null,
           liftKey: ex.liftKey || '',
           actualSets: [] // Will be filled when completed
@@ -1038,7 +1038,7 @@ function getAdjustedWorkingMax(profile, liftKey) {
     if (cjMax > 0) {
       // Push Press ≈ 70% of C&J, Strict Press ≈ 55% of C&J
       const ratio = liftKey === 'pushPress' ? 0.70 : 0.55;
-      const estimated = roundTo(cjMax * ratio, profile.units === 'kg' ? 0.5 : 1);
+      const estimated = roundTo(cjMax * ratio, profile.units === 'kg' ? 1 : 1);
       const adj = (profile.liftAdjustments && Number(profile.liftAdjustments[liftKey])) ? Number(profile.liftAdjustments[liftKey]) : 0;
       const capped = clamp(adj, -0.05, 0.05);
       return estimated * (1 + capped);
@@ -1136,9 +1136,10 @@ function computeCumulativeAdj(dayLog, exIndex, setIndex, scheme) {
 
 function buildSetScheme(ex, liftKey, profile) {
   const sets = [];
-  const targetPct = ex.pct || 0;
+  // For accessories with recommendedPct but no pct, use recommendedPct
+  const targetPct = ex.pct || ex.recommendedPct || 0;
   const wm = liftKey ? getBaseForExercise(ex.name, liftKey, profile) : 0;
-  const roundInc = profile.units === 'kg' ? 0.5 : 1;
+  const roundInc = profile.units === 'kg' ? 1 : 1;
   const pushSet = (pct, reps, tag) => {
     const w = (wm && pct) ? roundTo(wm * pct, roundInc) : 0;
     sets.push({ targetPct: pct, targetReps: reps, tag, targetWeight: w });
@@ -1213,7 +1214,7 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
     let recommendationText = '';
     if (ex.recommendedPct && ex.recommendedPct > 0 && ex.liftKey) {
       const baseMax = getBaseForExercise(ex.name, ex.liftKey, p);
-      const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 0.5 : 1) : 0;
+      const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 1 : 1) : 0;
       recommendationText = recWeight > 0 ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description} (~${recWeight}${p.units || 'kg'})</div>` : (ex.description ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>` : '');
     } else if (ex.description) {
       recommendationText = `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>`;
@@ -1330,7 +1331,7 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
       const recKey = `${exIndex}:${setIndex}`;
       const rec = dayLog[recKey] || {};
       const cumAdj = computeCumulativeAdj(dayLog, exIndex, setIndex, scheme);
-      const adjWeight = s.targetWeight ? roundTo(s.targetWeight * (1 + cumAdj), p.units === 'kg' ? 0.5 : 1) : 0;
+      const adjWeight = s.targetWeight ? roundTo(s.targetWeight * (1 + cumAdj), p.units === 'kg' ? 1 : 1) : 0;
       const weightVal = (rec.weight != null && rec.weight !== '') ? rec.weight : (adjWeight || '');
       const repsVal = (rec.reps != null && rec.reps !== '') ? rec.reps : (s.targetReps || '');
       const rpeVal = (rec.rpe != null && rec.rpe !== '') ? rec.rpe : '';
@@ -1408,7 +1409,7 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
             for (let j = setIndex + 1; j < scheme.length; j++) {
               if (scheme[j]?.tag !== 'work') continue;
               const nextAdj = computeCumulativeAdj(dayLog, exIndex, j, scheme);
-              const nextW = scheme[j].targetWeight ? roundTo(scheme[j].targetWeight * (1 + nextAdj), p.units === 'kg' ? 0.5 : 1) : '';
+              const nextW = scheme[j].targetWeight ? roundTo(scheme[j].targetWeight * (1 + nextAdj), p.units === 'kg' ? 1 : 1) : '';
               const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
               if (nextRow) {
                 const nextWEl = nextRow.querySelector('[data-role="weight"]');
@@ -1571,7 +1572,7 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
   addExCard.className = 'card';
   addExCard.style.marginBottom = '14px';
   addExCard.style.cursor = 'pointer';
-  addExCard.style.border = '2px dashed rgba(59, 130, 246, 0.5)';
+  addExCard.style.border = '2px dashed rgba(59, 130, 246, 1)';
   addExCard.innerHTML = `
     <div style="padding:16px; text-align:center; color:var(--primary); font-weight:600;">
       + Add Exercise
@@ -2163,7 +2164,7 @@ function completeDay(weekIndex, dayIndex, dayPlan) {
       let weightText = '';
       if (ex.pct && liftKey) {
         const base = getBaseForExercise(ex.name, liftKey, p);
-        const wgt = roundTo(base * ex.pct, p.units === 'kg' ? 0.5 : 1);
+        const wgt = roundTo(base * ex.pct, p.units === 'kg' ? 1 : 1);
         weightText = `${wgt} ${p.units} (${Math.round(ex.pct * 100)}%)`;
       }
       return { ...ex, weightText };
@@ -2195,7 +2196,7 @@ function completeDay(weekIndex, dayIndex, dayPlan) {
     const rec = dayLog[recKey] || {};
     const act = rec.action || '';
     const adj = computeCumulativeAdj(dayLog, exIndex, lastWork, scheme);
-    const prescribed = scheme[lastWork]?.targetWeight ? roundTo(scheme[lastWork].targetWeight * (1 + adj), p.units === 'kg' ? 0.5 : 1) : 0;
+    const prescribed = scheme[lastWork]?.targetWeight ? roundTo(scheme[lastWork].targetWeight * (1 + adj), p.units === 'kg' ? 1 : 1) : 0;
     const performed = Number(rec.weight);
     let d = actionToAdj(act);
     if (Number.isFinite(performed) && performed > 0 && prescribed > 0) {
