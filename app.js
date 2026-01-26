@@ -45,48 +45,6 @@ function notify(msg) {
   console.log(msg);
 }
 
-// v7.15 STAGE 2: Plate Calculator
-function calculatePlates(targetWeight, units = 'kg', barWeight = null) {
-  // Default bar weights
-  const defaultBar = units === 'kg' ? 20 : 45;
-  const bar = barWeight || defaultBar;
-  
-  // Available plates (sorted descending)
-  const plates = units === 'kg' 
-    ? [25, 20, 15, 10, 5, 2.5, 1.25, 1, 0.5, 0.25]
-    : [45, 35, 25, 10, 5, 2.5];
-  
-  // Weight per side
-  const perSide = (targetWeight - bar) / 2;
-  
-  if (perSide <= 0) {
-    return { plates: [], perSide: 0, text: `Bar only (${bar}${units})` };
-  }
-  
-  // Greedy algorithm to find plates
-  let remaining = perSide;
-  const result = [];
-  
-  for (const plate of plates) {
-    while (remaining >= plate - 0.01) { // Small tolerance for floating point
-      result.push(plate);
-      remaining -= plate;
-    }
-  }
-  
-  // Format text
-  if (result.length === 0) {
-    return { plates: [], perSide, text: `Bar only (${bar}${units})` };
-  }
-  
-  const plateText = result.map(p => `${p}${units}`).join(' + ');
-  return { 
-    plates: result, 
-    perSide,
-    text: `${plateText} per side`
-  };
-}
-
 // v7.16 STAGE 4: Rest Timer
 let restTimer = {
   active: false,
@@ -145,22 +103,44 @@ function updateRestTimerDisplay() {
   const timerEl = document.querySelector(`[data-rest-timer="${restTimer.exerciseKey}"]`);
   if (timerEl) {
     if (remaining > 0) {
-      timerEl.textContent = `⏱ Rest: ${timeStr}`;
+      // Pronounced countdown display
+      timerEl.textContent = `⏱ ${timeStr}`;
       timerEl.style.display = 'block';
-      timerEl.style.color = remaining <= 10 ? '#ef4444' : 'var(--text)';
-      timerEl.style.fontWeight = remaining <= 10 ? '700' : '400';
-    } else {
-      timerEl.textContent = '✅ Ready!';
-      timerEl.style.color = '#10b981';
-      timerEl.style.fontWeight = '700';
       
-      // Auto-clear after 3 seconds
+      if (remaining <= 10) {
+        // Last 10 seconds - RED and urgent
+        timerEl.style.color = '#ef4444';
+        timerEl.style.background = 'rgba(239,68,68,0.15)';
+        timerEl.style.borderColor = 'rgba(239,68,68,0.6)';
+        timerEl.style.fontSize = '24px';
+      } else if (remaining <= 30) {
+        // Last 30 seconds - ORANGE warning
+        timerEl.style.color = '#f59e0b';
+        timerEl.style.background = 'rgba(245,158,11,0.15)';
+        timerEl.style.borderColor = 'rgba(245,158,11,0.5)';
+        timerEl.style.fontSize = '22px';
+      } else {
+        // Normal - BLUE
+        timerEl.style.color = '#3b82f6';
+        timerEl.style.background = 'rgba(59,130,246,0.15)';
+        timerEl.style.borderColor = 'rgba(59,130,246,0.5)';
+        timerEl.style.fontSize = '20px';
+      }
+    } else {
+      // Ready state - GREEN and prominent
+      timerEl.textContent = '✅ READY TO LIFT!';
+      timerEl.style.color = '#10b981';
+      timerEl.style.background = 'rgba(16,185,129,0.2)';
+      timerEl.style.borderColor = 'rgba(16,185,129,0.6)';
+      timerEl.style.fontSize = '24px';
+      
+      // Auto-clear after 5 seconds
       setTimeout(() => {
-        if (timerEl.textContent === '✅ Ready!') {
+        if (timerEl.textContent === '✅ READY TO LIFT!') {
           timerEl.textContent = '';
           timerEl.style.display = 'none';
         }
-      }, 3000);
+      }, 5000);
       
       stopRestTimer();
     }
@@ -1504,10 +1484,10 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
         <div class="card-title"><span class="collapse-icon" style="margin-right:8px; user-select:none;">▶</span>${ex.name}</div>
         <div class="card-subtitle">${workSets}×${ex.reps}${ex.pct && liftKey ? ` • ${Math.round(ex.pct*100)}%` : ''}${ex.targetRIR ? ` • RIR ${ex.targetRIR}` : ''}</div>
         ${recommendationText}
-        <div data-rest-timer="ex${exIndex}" style="display:none; margin-top:6px; font-size:13px; font-weight:600; color:var(--primary);"></div>
+        <div data-rest-timer="ex${exIndex}" style="display:none; margin-top:10px; padding:12px 16px; background:rgba(59,130,246,0.15); border:2px solid rgba(59,130,246,0.5); border-radius:10px; font-size:20px; font-weight:700; text-align:center; letter-spacing:1px;"></div>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
-        <button class="secondary small" data-role="startTimer" style="min-width:70px;">⏱ 3:00</button>
+        <button class="primary" data-role="startTimer" style="min-width:90px; font-size:16px; font-weight:700; padding:10px 16px;">⏱ Start Rest</button>
         <select class="quick-swap" data-role="swap"></select>
         <button class="secondary small" data-role="minusSet">− Set</button>
         <button class="secondary small" data-role="plusSet">+ Set</button>
@@ -1639,15 +1619,10 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
       row.dataset.idx = String(setIndex);
       row.innerHTML = `
         <td style="padding:8px 6px; opacity:.9">${setIndex + 1}${s.tag === 'warmup' ? '<span style="opacity:.6">w</span>' : ''}</td>
-        <td style="padding:6px">
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input inputmode="decimal" class="input small" data-role="weight" placeholder="—" />
-              <span style="opacity:.65; font-size:12px">${s.targetPct ? `${Math.round(s.targetPct*100)}%` : (s.tag || '')}</span>
-            </div>
-            <div data-role="plate-calc" style="font-size:11px; opacity:0.6; min-height:14px;"></div>
-          </div>
-        </td>
+        <td style="padding:6px"><div style="display:flex; gap:8px; align-items:center;">
+          <input inputmode="decimal" class="input small" data-role="weight" placeholder="—" />
+          <span style="opacity:.65; font-size:12px">${s.targetPct ? `${Math.round(s.targetPct*100)}%` : (s.tag || '')}</span>
+        </div></td>
         <td style="padding:6px"><input inputmode="numeric" class="input small" data-role="reps" placeholder="—" /></td>
         <td style="padding:6px"><input inputmode="decimal" class="input small" data-role="rpe" placeholder="—" /></td>
         <td style="padding:6px"><select class="input small" data-role="action">
@@ -1659,35 +1634,16 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
       const repsEl = row.querySelector('[data-role="reps"]');
       const rpeEl = row.querySelector('[data-role="rpe"]');
       const aEl = row.querySelector('[data-role="action"]');
-      const plateCalcEl = row.querySelector('[data-role="plate-calc"]');
       
-      // Function to update plate calculator
-      const updatePlateCalc = () => {
-        if (!plateCalcEl) return;
-        const weight = Number(wEl.value);
-        if (Number.isFinite(weight) && weight > 0) {
-          const calc = calculatePlates(weight, p.units || 'kg');
-          plateCalcEl.textContent = `🏋️ ${calc.text}`;
-          plateCalcEl.style.opacity = '0.7';
-        } else {
-          plateCalcEl.textContent = '';
-        }
-      };
       
       if (wEl) { 
         wEl.value = String(weightVal);
-        
-        // Initial plate calc
-        updatePlateCalc();
         
         // v7.12 FIX #1: Use 'change' instead of 'input' event
         // Prevents bug where typing "50" shows: 50, 5, 5
         // 'change' fires only when user finishes (blur or Enter)
         wEl.addEventListener('change', () => {
           updateRec(setIndex, { weight: wEl.value, status: 'done' });
-          
-          // v7.15 STAGE 2: Update plate calculator
-          updatePlateCalc();
           
           // Auto-fill subsequent EMPTY sets with user's entered weight
           const entered = Number(wEl.value);
