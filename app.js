@@ -1480,14 +1480,31 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
     head.style.justifyContent = 'space-between';
     head.style.alignItems = 'center';
     
-    // Calculate recommendation for accessories
+    // v7.22 FIX #3: Calculate recommendation for accessories - IMPROVED READABILITY
     let recommendationText = '';
     if (ex.recommendedPct && ex.recommendedPct > 0 && ex.liftKey) {
       const baseMax = getBaseForExercise(ex.name, ex.liftKey, p);
       const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 1 : 1) : 0;
-      recommendationText = recWeight > 0 ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description} (~${recWeight}${p.units || 'kg'})</div>` : (ex.description ? `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>` : '');
+      
+      // Expand lift key abbreviations
+      const liftNames = {
+        'snatch': 'Snatch',
+        'cj': 'Clean & Jerk',
+        'fs': 'Front Squat',
+        'bs': 'Back Squat',
+        'pushPress': 'Push Press',
+        'strictPress': 'Strict Press'
+      };
+      const fullLiftName = liftNames[ex.liftKey] || ex.liftKey;
+      const pctText = Math.round(ex.recommendedPct * 100);
+      
+      recommendationText = recWeight > 0 
+        ? `<div style="margin-top:8px; padding:8px 12px; background:rgba(59,130,246,0.08); border-left:3px solid rgba(59,130,246,0.4); border-radius:6px; font-size:14px; line-height:1.4;">
+             <span style="opacity:0.7;">💪 Recommended:</span> <span style="font-weight:600;">${pctText}% of ${fullLiftName}</span> <span style="opacity:0.8;">(~${recWeight}${p.units || 'kg'})</span>
+           </div>` 
+        : (ex.description ? `<div style="margin-top:8px; padding:8px 12px; background:rgba(59,130,246,0.08); border-left:3px solid rgba(59,130,246,0.4); border-radius:6px; font-size:14px;"><span style="opacity:0.7;">💪 Note:</span> ${ex.description}</div>` : '');
     } else if (ex.description) {
-      recommendationText = `<div class="card-subtitle" style="opacity:.7; margin-top:4px;">Rec: ${ex.description}</div>`;
+      recommendationText = `<div style="margin-top:8px; padding:8px 12px; background:rgba(59,130,246,0.08); border-left:3px solid rgba(59,130,246,0.4); border-radius:6px; font-size:14px;"><span style="opacity:0.7;">💪 Note:</span> ${ex.description}</div>`;
     }
     
     head.innerHTML = `
@@ -1724,25 +1741,25 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
         aEl.addEventListener('change', () => {
           updateRec(setIndex, { action: aEl.value, status: 'done' });
           
-          // v7.20 CRITICAL FIX #4: Use ACTUAL weight from input field for action calculations
-          // Bug: Was using prescribed weight, should use user's actual entered weight
+          // v7.22 FIX #4 COMPLETE: Use ACTUAL weight from input field for action calculations
           const actualWeight = Number(wEl.value);
           const hasActualWeight = Number.isFinite(actualWeight) && actualWeight > 0;
           
-          // v7.12 FIX #2: Only recalculate for prescribed exercises
-          // Skip hypertrophy (pct: 0) to preserve user-entered weights
           if (scheme[setIndex]?.tag === 'work' && hasActualWeight) {
-            // Calculate adjustment based on ACTUAL weight, not prescribed
-            const prescribedWeight = scheme[setIndex].targetWeight || 0;
-            const baseAdjustment = prescribedWeight > 0 ? (actualWeight - prescribedWeight) / prescribedWeight : 0;
+            // Store the actual weight so action adjustments are based on it
+            updateRec(setIndex, { weight: actualWeight });
+            
+            // Calculate next sets based on ACTUAL weight + action adjustment
+            const actionAdj = actionDelta(aEl.value);
             
             for (let j = setIndex + 1; j < scheme.length; j++) {
               if (scheme[j]?.tag !== 'work') continue;
-              // Also check subsequent sets have prescribed weight
               if (!scheme[j]?.targetWeight || scheme[j].targetWeight === 0) continue;
               
+              // Get cumulative adjustment from all previous sets
               const nextAdj = computeCumulativeAdj(dayLog, exIndex, j, scheme);
-              // Apply both the action-based adjustment AND the actual weight difference
+              
+              // Apply to prescribed weight of next set
               const nextW = roundTo(scheme[j].targetWeight * (1 + nextAdj), p.units === 'kg' ? 1 : 1);
               const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
               if (nextRow) {
