@@ -2413,16 +2413,51 @@ function renderHistory() {
     
     card.innerHTML = `
       <div class="card-title">${block.programType || 'General'} Block</div>
-      <div class="card-subtitle">${block.startDateISO} • ${block.blockLength} weeks • ${completedDays}/${totalDays} sessions completed</div>
+      <div class="card-subtitle">${block.startDateISO} • ${block.blockLength} weeks • ${completedDays}/${totalDays} sessions completed (${progressPct}%)</div>
       <div style="margin-top:8px;background:rgba(255,255,255,0.1);border-radius:8px;height:6px;overflow:hidden">
         <div style="width:${progressPct}%;height:100%;background:var(--primary);transition:width 0.3s"></div>
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px">
-        <button class="btn-mini primary" data-action="view" style="flex:1">View Details</button>
-        <button class="btn-mini secondary" data-action="export" style="flex:1">Export</button>
-        <button class="btn-mini danger" data-action="delete" style="flex:0 0 auto">Delete</button>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-mini success" data-action="load" style="flex:1;min-width:80px">📋 Load</button>
+        <button class="btn-mini primary" data-action="redo" style="flex:1;min-width:80px">🔄 Redo</button>
+        <button class="btn-mini secondary" data-action="view" style="flex:1;min-width:80px">👁 View</button>
+        <button class="btn-mini secondary" data-action="export" style="flex:1;min-width:80px">📤 Export</button>
+        <button class="btn-mini danger" data-action="delete" style="flex:0 0 auto">✕</button>
       </div>
     `;
+    
+    // Load block as current
+    card.querySelector('[data-action="load"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Load this block as your current training block?\n\nThis will replace your current block.`)) {
+        state.currentBlock = JSON.parse(JSON.stringify(block));
+        saveState();
+        renderWorkout();
+        notify('✅ Block loaded! Go to Dashboard to continue.');
+        showPage('Dashboard');
+      }
+    });
+    
+    // Redo block (reset all completion)
+    card.querySelector('[data-action="redo"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Redo this entire ${block.blockLength}-week block from scratch?\n\nThis will reset all completed sessions and start fresh from Week 1, Day 1.`)) {
+        const freshBlock = JSON.parse(JSON.stringify(block));
+        freshBlock.weeks.forEach(week => {
+          week.days.forEach(day => {
+            day.completed = false;
+            day.completedDate = null;
+          });
+        });
+        freshBlock.startDateISO = todayISO();
+        state.currentBlock = freshBlock;
+        state.setLogs = {};
+        saveState();
+        renderWorkout();
+        notify('✅ Block reset! Starting fresh from Week 1.');
+        showPage('Dashboard');
+      }
+    });
     
     // View details
     card.querySelector('[data-action="view"]')?.addEventListener('click', (e) => {
@@ -2846,16 +2881,94 @@ function wireButtons() {
     ui.weekIndex = clamp(ui.weekIndex + 1, 0, state.currentBlock.weeks.length - 1);
     renderWorkout();
   });
+  // v7.24: Full state export (not just history)
   $('btnExport')?.addEventListener('click', () => {
-    const data = JSON.stringify({ history: state.history || [] }, null, 2);
+    const exportData = {
+      version: 'v7.24',
+      exportDate: new Date().toISOString(),
+      currentBlock: state.currentBlock,
+      blockHistory: state.blockHistory || [],
+      history: state.history || [],
+      profiles: state.profiles,
+      activeProfile: state.activeProfile,
+      setLogs: state.setLogs || {}
+    };
+    const data = JSON.stringify(exportData, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'liftai_history.json';
+    a.download = `liftai_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    notify('✅ Data exported successfully!');
   });
+  
+  // v7.24: Import button handler
+  $('btnImport')?.addEventListener('click', () => {
+    const fileInput = $('fileImport');
+    if (fileInput) fileInput.click();
+  });
+  
+  // v7.24: File import handler
+  $('fileImport')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importData = JSON.parse(event.target.result);
+        
+        if (!importData.version) {
+          alert('Invalid file format. Please select a valid LiftAI backup file.');
+          return;
+        }
+        
+        if (!confirm(`Import data from ${importData.exportDate || 'backup'}?\n\nThis will MERGE with your current data (not replace).`)) {
+          return;
+        }
+        
+        // Merge imported data
+        if (importData.blockHistory) {
+          state.blockHistory = state.blockHistory || [];
+          importData.blockHistory.forEach(block => {
+            if (!state.blockHistory.find(b => b.id === block.id)) {
+              state.blockHistory.push(block);
+            }
+          });
+        }
+        
+        if (importData.profiles) {
+          Object.keys(importData.profiles).forEach(profileName => {
+            if (!state.profiles[profileName]) {
+              state.profiles[profileName] = importData.profiles[profileName];
+            }
+          });
+        }
+        
+        if (importData.history) {
+          state.history = state.history || [];
+          state.history.push(...importData.history);
+        }
+        
+        if (importData.currentBlock && confirm('Also import the active training block from this backup?')) {
+          state.currentBlock = importData.currentBlock;
+        }
+        
+        saveState();
+        renderHistory();
+        renderSettings();
+        notify('✅ Data imported successfully!');
+      } catch (err) {
+        console.error('Import error:', err);
+        alert('Failed to import file. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+  
   $('settingsProfileSelect')?.addEventListener('change', (e) => {
     setActiveProfile(e.target.value);
     renderSettings();
