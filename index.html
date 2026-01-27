@@ -1234,11 +1234,15 @@ body{ overflow-x:hidden; }
 <section class="page hidden" id="pageHistory">
 <div class="card">
 <div class="flex-between" style="margin-bottom:16px">
-<div><div class="card-title">Training History</div><div class="card-subtitle">Completed sessions</div></div>
-<button class="secondary small" id="btnExport">Export</button>
+<div><div class="card-title">Training History</div><div class="card-subtitle">Completed sessions & saved blocks</div></div>
+<div style="display:flex;gap:8px">
+<button class="secondary small" id="btnImport">📥 Import</button>
+<button class="secondary small" id="btnExport">📤 Export</button>
+</div>
 </div>
 <div id="historyList"></div>
 </div>
+<input type="file" id="fileImport" accept=".json" style="display:none" />
 </section>
 <section class="page hidden" id="pageSettings">
 <div class="card">
