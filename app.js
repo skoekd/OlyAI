@@ -374,14 +374,21 @@ function getSwapOptionsForExercise(ex, dayPlan) {
   // v7.25: Check if this is an accessory exercise with a category
   const category = EXERCISE_CATEGORIES[ex.name];
   
+  // DEBUG: Log what we found
+  console.log('🔍 Swap lookup for:', ex.name);
+  console.log('   Category found:', category);
+  console.log('   Has database:', category && ACCESSORY_DATABASE[category] ? 'YES' : 'NO');
+  
   let pool = [];
   
   if (category && ACCESSORY_DATABASE[category]) {
     // Use accessory database for recognized exercises
     pool = ACCESSORY_DATABASE[category].map(name => ({ name, liftKey: '' }));
+    console.log('   ✅ Using accessory database, pool size:', pool.length);
   } else if (SWAP_POOLS[family]) {
     // Use Olympic lift pools for comp lifts
     pool = [...SWAP_POOLS[family]];
+    console.log('   ⚠️ Using Olympic lift pools (family:', family + ')');
   }
   
   // Ensure current exercise is in the list
@@ -2499,19 +2506,29 @@ function renderHistory() {
       e.stopPropagation();
       if (confirm(`Redo this entire ${block.blockLength}-week block from scratch?\n\nThis will reset all completed sessions and start fresh from Week 1, Day 1.`)) {
         const freshBlock = JSON.parse(JSON.stringify(block));
+        
+        // Reset all completion flags
         freshBlock.weeks.forEach(week => {
           week.days.forEach(day => {
             day.completed = false;
             day.completedDate = null;
           });
         });
+        
+        // Reset to today's date and Week 1
         freshBlock.startDateISO = todayISO();
+        freshBlock.currentWeek = 0;  // Week 1 (0-indexed)
+        
+        // Set as current block
         state.currentBlock = freshBlock;
-        state.setLogs = {};
+        state.setLogs = {};  // Clear all set logs
         saveState();
+        
+        // Render and navigate to Workout tab to show the fresh block
+        renderDashboard();
         renderWorkout();
-        notify('✅ Block reset! Starting fresh from Week 1.');
-        showPage('Dashboard');
+        notify('✅ Block reset! Starting fresh from Week 1, Day 1.');
+        showPage('Workout');  // Changed from Dashboard to Workout
       }
     });
     
