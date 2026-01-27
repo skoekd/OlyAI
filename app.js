@@ -319,41 +319,147 @@ const SWAP_POOLS = {
   ]
 };
 
-// v7.25: COMPREHENSIVE ACCESSORY EXERCISE DATABASE
+// v7.27: COMPREHENSIVE ACCESSORY EXERCISE DATABASE - ALL EXERCISES MAPPED
 const ACCESSORY_DATABASE = {
-  back_vertical: ['Pull-ups', 'Weighted Pull-ups', 'Chin-ups', 'Lat Pulldown', 'Wide-Grip Lat Pulldown', 'Close-Grip Lat Pulldown'],
-  back_horizontal: ['Barbell Row', 'Pendlay Row', 'T-Bar Row', 'Dumbbell Row', 'Chest-Supported Row', 'Seated Cable Row', 'Machine Row'],
-  shoulders_press: ['Overhead Press', 'Seated Dumbbell Press', 'Standing Dumbbell Press', 'Arnold Press', 'Machine Shoulder Press'],
-  shoulders_lateral: ['Dumbbell Lateral Raise', 'Cable Lateral Raise', 'Machine Lateral Raise', 'Leaning Cable Lateral Raise'],
-  shoulders_rear: ['Face Pull', 'Reverse Pec Deck', 'Bent-Over Dumbbell Fly', 'Cable Rear Delt Fly', 'Rear Delt Row'],
-  chest_press: ['Barbell Bench Press', 'Incline Barbell Bench Press', 'Dumbbell Bench Press', 'Incline Dumbbell Press', 'Weighted Dips', 'Bodyweight Dips', 'Machine Chest Press'],
-  chest_isolation: ['Cable Flyes', 'Dumbbell Flyes', 'Pec Deck Machine', 'Incline Cable Flyes'],
-  legs_quad: ['Leg Extension', 'Single-Leg Extension', 'Leg Press', 'Hack Squat Machine', 'Bulgarian Split Squat'],
-  legs_hamstring: ['Leg Curl', 'Seated Leg Curl', 'Lying Leg Curl', 'Nordic Curl', 'Romanian Deadlift', 'Dumbbell Romanian Deadlift'],
-  legs_glutes: ['Hip Thrust', 'Barbell Glute Bridge', 'Cable Pull-Through'],
-  legs_calves: ['Standing Calf Raise', 'Seated Calf Raise', 'Leg Press Calf Raise'],
-  arms_biceps: ['Barbell Curl', 'EZ-Bar Curl', 'Dumbbell Curl', 'Hammer Curl', 'Incline Dumbbell Curl', 'Cable Curl', 'Preacher Curl'],
-  arms_triceps: ['Close-Grip Bench Press', 'Dumbbell Overhead Extension', 'Cable Tricep Pushdown', 'Rope Tricep Pushdown', 'Overhead Cable Extension', 'Skull Crusher'],
-  core: ['Plank', 'Ab Wheel Rollout', 'Cable Crunch', 'Pallof Press', 'Side Plank']
+  back_vertical: [
+    'Pull-up', 'Pull-ups', 'Weighted Pull-up', 'Weighted Pull-ups',
+    'Chin-up', 'Chin-ups', 
+    'Lat Pulldown', 'Wide-Grip Lat Pulldown', 'Close-Grip Lat Pulldown'
+  ],
+  back_horizontal: [
+    'Barbell Row', 'Pendlay Row', 'T-Bar Row', 
+    'Dumbbell Row', 'Single-Arm Row', 'Single-Arm Dumbbell Row',
+    'Chest-Supported Row', 'Seated Cable Row', 'Cable Row', 'Machine Row', 
+    'TRX Row', 'Row', 'Back Extension'
+  ],
+  shoulders_press: [
+    'Overhead Press', 'Seated Dumbbell Press', 'Standing Dumbbell Press',
+    'Overhead Dumbbell Press', 'Arnold Press', 'Machine Shoulder Press',
+    'Landmine Press'
+  ],
+  shoulders_lateral: [
+    'Dumbbell Lateral Raise', 'Cable Lateral Raise', 'Machine Lateral Raise',
+    'Leaning Cable Lateral Raise', 'Lateral Raise', 'Front Raise'
+  ],
+  shoulders_rear: [
+    'Face Pull', 'Reverse Pec Deck', 'Bent-Over Dumbbell Fly',
+    'Cable Rear Delt Fly', 'Rear Delt Row', 'Rear Delt Fly'
+  ],
+  chest_press: [
+    'Barbell Bench Press', 'Incline Barbell Bench Press', 'Dumbbell Bench Press',
+    'Incline Dumbbell Press', 'Weighted Dips', 'Bodyweight Dips',
+    'Machine Chest Press', 'Dips', 'Close-Grip Push-up'
+  ],
+  chest_isolation: [
+    'Cable Flyes', 'Dumbbell Flyes', 'Pec Deck Machine', 'Incline Cable Flyes'
+  ],
+  legs_quad: [
+    'Leg Extension', 'Single-Leg Extension', 'Leg Press',
+    'Hack Squat Machine', 'Bulgarian Split Squat'
+  ],
+  legs_hamstring: [
+    'Leg Curl', 'Seated Leg Curl', 'Lying Leg Curl', 'Nordic Curl',
+    'Romanian Deadlift', 'RDL', 'Dumbbell Romanian Deadlift', 'Good Morning'
+  ],
+  legs_glutes: [
+    'Hip Thrust', 'Barbell Glute Bridge', 'Glute Bridge', 'Cable Pull-Through'
+  ],
+  legs_calves: [
+    'Standing Calf Raise', 'Seated Calf Raise', 'Leg Press Calf Raise', 'Calf Raises'
+  ],
+  arms_biceps: [
+    'Barbell Curl', 'EZ-Bar Curl', 'Dumbbell Curl', 'Hammer Curl',
+    'Incline Dumbbell Curl', 'Cable Curl', 'Preacher Curl'
+  ],
+  arms_triceps: [
+    'Close-Grip Bench Press', 'Dumbbell Overhead Extension',
+    'Cable Tricep Pushdown', 'Rope Tricep Pushdown', 'Tricep Pushdown',
+    'Overhead Cable Extension', 'Skull Crusher', 'Rope Tricep Extension', 'Tricep Extension'
+  ],
+  core: [
+    'Plank', 'Ab Wheel Rollout', 'Cable Crunch', 'Pallof Press',
+    'Side Plank', 'Core + Mobility', 'Core Circuit'
+  ]
 };
 
 // v7.25: Map exercises to categories for intelligent swapping
 const EXERCISE_CATEGORIES = {
+  // BACK - Vertical Pull (Lats)
   'Lat Pulldown': 'back_vertical', 'Wide-Grip Lat Pulldown': 'back_vertical', 'Close-Grip Lat Pulldown': 'back_vertical',
-  'Pull-ups': 'back_vertical', 'Weighted Pull-ups': 'back_vertical', 'Chin-ups': 'back_vertical',
+  'Pull-ups': 'back_vertical', 'Pull-up': 'back_vertical', 
+  'Weighted Pull-ups': 'back_vertical', 'Weighted Pull-up': 'back_vertical',
+  'Chin-ups': 'back_vertical', 'Chin-up': 'back_vertical',
+  
+  // BACK - Horizontal Pull (Mid-back, Traps)
   'Barbell Row': 'back_horizontal', 'Pendlay Row': 'back_horizontal', 'T-Bar Row': 'back_horizontal',
-  'Dumbbell Row': 'back_horizontal', 'Chest-Supported Row': 'back_horizontal', 'Seated Cable Row': 'back_horizontal', 'Machine Row': 'back_horizontal',
-  'Dumbbell Lateral Raise': 'shoulders_lateral', 'Cable Lateral Raise': 'shoulders_lateral', 'Machine Lateral Raise': 'shoulders_lateral',
-  'Face Pull': 'shoulders_rear', 'Reverse Pec Deck': 'shoulders_rear', 'Bent-Over Dumbbell Fly': 'shoulders_rear', 'Cable Rear Delt Fly': 'shoulders_rear', 'Rear Delt Row': 'shoulders_rear',
-  'Overhead Press': 'shoulders_press', 'Seated Dumbbell Press': 'shoulders_press', 'Standing Dumbbell Press': 'shoulders_press', 'Arnold Press': 'shoulders_press',
-  'Cable Flyes': 'chest_isolation', 'Dumbbell Flyes': 'chest_isolation', 'Pec Deck Machine': 'chest_isolation',
-  'Leg Extension': 'legs_quad', 'Single-Leg Extension': 'legs_quad', 'Leg Press': 'legs_quad',
-  'Leg Curl': 'legs_hamstring', 'Seated Leg Curl': 'legs_hamstring', 'Lying Leg Curl': 'legs_hamstring', 'Nordic Curl': 'legs_hamstring',
-  'Hip Thrust': 'legs_glutes', 'Barbell Glute Bridge': 'legs_glutes', 'Cable Pull-Through': 'legs_glutes',
-  'Standing Calf Raise': 'legs_calves', 'Seated Calf Raise': 'legs_calves',
-  'Barbell Curl': 'arms_biceps', 'EZ-Bar Curl': 'arms_biceps', 'Dumbbell Curl': 'arms_biceps', 'Hammer Curl': 'arms_biceps', 'Cable Curl': 'arms_biceps', 'Preacher Curl': 'arms_biceps',
-  'Cable Tricep Pushdown': 'arms_triceps', 'Rope Tricep Pushdown': 'arms_triceps', 'Dumbbell Overhead Extension': 'arms_triceps', 'Skull Crusher': 'arms_triceps',
-  'Plank': 'core', 'Ab Wheel Rollout': 'core', 'Cable Crunch': 'core', 'Pallof Press': 'core'
+  'Dumbbell Row': 'back_horizontal', 'Chest-Supported Row': 'back_horizontal', 
+  'Seated Cable Row': 'back_horizontal', 'Machine Row': 'back_horizontal',
+  'Row': 'back_horizontal', 'Cable Row': 'back_horizontal', 
+  'Single-Arm Row': 'back_horizontal', 'Single-Arm Dumbbell Row': 'back_horizontal', 'TRX Row': 'back_horizontal',
+  'Back Extension': 'back_horizontal',
+  
+  // SHOULDERS - Press
+  'Overhead Press': 'shoulders_press', 'Seated Dumbbell Press': 'shoulders_press', 
+  'Standing Dumbbell Press': 'shoulders_press', 'Arnold Press': 'shoulders_press',
+  'Overhead Dumbbell Press': 'shoulders_press', 'Machine Shoulder Press': 'shoulders_press',
+  'Landmine Press': 'shoulders_press',
+  
+  // SHOULDERS - Lateral Delts
+  'Dumbbell Lateral Raise': 'shoulders_lateral', 'Cable Lateral Raise': 'shoulders_lateral', 
+  'Machine Lateral Raise': 'shoulders_lateral', 'Leaning Cable Lateral Raise': 'shoulders_lateral',
+  'Lateral Raise': 'shoulders_lateral', 'Front Raise': 'shoulders_lateral',
+  
+  // SHOULDERS - Rear Delts
+  'Face Pull': 'shoulders_rear', 'Reverse Pec Deck': 'shoulders_rear', 
+  'Bent-Over Dumbbell Fly': 'shoulders_rear', 'Cable Rear Delt Fly': 'shoulders_rear', 
+  'Rear Delt Row': 'shoulders_rear', 'Rear Delt Fly': 'shoulders_rear',
+  
+  // CHEST - Press
+  'Barbell Bench Press': 'chest_press', 'Incline Barbell Bench Press': 'chest_press',
+  'Dumbbell Bench Press': 'chest_press', 'Incline Dumbbell Press': 'chest_press',
+  'Weighted Dips': 'chest_press', 'Bodyweight Dips': 'chest_press', 
+  'Machine Chest Press': 'chest_press', 'Dips': 'chest_press',
+  'Close-Grip Push-up': 'chest_press',
+  
+  // CHEST - Isolation
+  'Cable Flyes': 'chest_isolation', 'Dumbbell Flyes': 'chest_isolation', 
+  'Pec Deck Machine': 'chest_isolation', 'Incline Cable Flyes': 'chest_isolation',
+  
+  // LEGS - Quads
+  'Leg Extension': 'legs_quad', 'Single-Leg Extension': 'legs_quad', 
+  'Leg Press': 'legs_quad', 'Hack Squat Machine': 'legs_quad', 
+  'Bulgarian Split Squat': 'legs_quad',
+  
+  // LEGS - Hamstrings
+  'Leg Curl': 'legs_hamstring', 'Seated Leg Curl': 'legs_hamstring', 
+  'Lying Leg Curl': 'legs_hamstring', 'Nordic Curl': 'legs_hamstring',
+  'Romanian Deadlift': 'legs_hamstring', 'Dumbbell Romanian Deadlift': 'legs_hamstring',
+  'RDL': 'legs_hamstring', 'Good Morning': 'legs_hamstring',
+  
+  // LEGS - Glutes
+  'Hip Thrust': 'legs_glutes', 'Barbell Glute Bridge': 'legs_glutes', 
+  'Cable Pull-Through': 'legs_glutes', 'Glute Bridge': 'legs_glutes',
+  
+  // LEGS - Calves
+  'Standing Calf Raise': 'legs_calves', 'Seated Calf Raise': 'legs_calves', 
+  'Leg Press Calf Raise': 'legs_calves', 'Calf Raises': 'legs_calves',
+  
+  // ARMS - Biceps
+  'Barbell Curl': 'arms_biceps', 'EZ-Bar Curl': 'arms_biceps', 
+  'Dumbbell Curl': 'arms_biceps', 'Hammer Curl': 'arms_biceps',
+  'Incline Dumbbell Curl': 'arms_biceps', 'Cable Curl': 'arms_biceps', 
+  'Preacher Curl': 'arms_biceps',
+  
+  // ARMS - Triceps
+  'Close-Grip Bench Press': 'arms_triceps', 'Dumbbell Overhead Extension': 'arms_triceps',
+  'Cable Tricep Pushdown': 'arms_triceps', 'Rope Tricep Pushdown': 'arms_triceps',
+  'Overhead Cable Extension': 'arms_triceps', 'Skull Crusher': 'arms_triceps',
+  'Tricep Pushdown': 'arms_triceps', 'Rope Tricep Extension': 'arms_triceps', 'Tricep Extension': 'arms_triceps',
+  
+  // CORE
+  'Plank': 'core', 'Ab Wheel Rollout': 'core', 'Cable Crunch': 'core', 
+  'Pallof Press': 'core', 'Side Plank': 'core', 
+  'Core + Mobility': 'core', 'Core Circuit': 'core'
 };
 
 function inferSwapFamily(exName, liftKey) {
@@ -2494,10 +2600,15 @@ function renderHistory() {
       e.stopPropagation();
       if (confirm(`Load this block as your current training block?\n\nThis will replace your current block.`)) {
         state.currentBlock = JSON.parse(JSON.stringify(block));
+        
+        // Reset to the appropriate week based on block's currentWeek or start from beginning
+        ui.weekIndex = block.currentWeek || 0;
+        
         saveState();
+        renderDashboard();
         renderWorkout();
-        notify('✅ Block loaded! Go to Dashboard to continue.');
-        showPage('Dashboard');
+        notify('✅ Block loaded! Check Workout tab to continue.');
+        showPage('Workout');
       }
     });
     
@@ -2522,13 +2633,17 @@ function renderHistory() {
         // Set as current block
         state.currentBlock = freshBlock;
         state.setLogs = {};  // Clear all set logs
+        
+        // CRITICAL: Reset UI week index to 0
+        ui.weekIndex = 0;
+        
         saveState();
         
         // Render and navigate to Workout tab to show the fresh block
         renderDashboard();
         renderWorkout();
         notify('✅ Block reset! Starting fresh from Week 1, Day 1.');
-        showPage('Workout');  // Changed from Dashboard to Workout
+        showPage('Workout');  // Show Workout tab with fresh block
       }
     });
     
