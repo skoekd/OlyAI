@@ -1724,15 +1724,25 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
         aEl.addEventListener('change', () => {
           updateRec(setIndex, { action: aEl.value, status: 'done' });
           
+          // v7.20 CRITICAL FIX #4: Use ACTUAL weight from input field for action calculations
+          // Bug: Was using prescribed weight, should use user's actual entered weight
+          const actualWeight = Number(wEl.value);
+          const hasActualWeight = Number.isFinite(actualWeight) && actualWeight > 0;
+          
           // v7.12 FIX #2: Only recalculate for prescribed exercises
           // Skip hypertrophy (pct: 0) to preserve user-entered weights
-          if (scheme[setIndex]?.tag === 'work' && scheme[setIndex]?.targetWeight && scheme[setIndex].targetWeight > 0) {
+          if (scheme[setIndex]?.tag === 'work' && hasActualWeight) {
+            // Calculate adjustment based on ACTUAL weight, not prescribed
+            const prescribedWeight = scheme[setIndex].targetWeight || 0;
+            const baseAdjustment = prescribedWeight > 0 ? (actualWeight - prescribedWeight) / prescribedWeight : 0;
+            
             for (let j = setIndex + 1; j < scheme.length; j++) {
               if (scheme[j]?.tag !== 'work') continue;
               // Also check subsequent sets have prescribed weight
               if (!scheme[j]?.targetWeight || scheme[j].targetWeight === 0) continue;
               
               const nextAdj = computeCumulativeAdj(dayLog, exIndex, j, scheme);
+              // Apply both the action-based adjustment AND the actual weight difference
               const nextW = roundTo(scheme[j].targetWeight * (1 + nextAdj), p.units === 'kg' ? 1 : 1);
               const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
               if (nextRow) {
