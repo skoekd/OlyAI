@@ -319,6 +319,43 @@ const SWAP_POOLS = {
   ]
 };
 
+// v7.25: COMPREHENSIVE ACCESSORY EXERCISE DATABASE
+const ACCESSORY_DATABASE = {
+  back_vertical: ['Pull-ups', 'Weighted Pull-ups', 'Chin-ups', 'Lat Pulldown', 'Wide-Grip Lat Pulldown', 'Close-Grip Lat Pulldown'],
+  back_horizontal: ['Barbell Row', 'Pendlay Row', 'T-Bar Row', 'Dumbbell Row', 'Chest-Supported Row', 'Seated Cable Row', 'Machine Row'],
+  shoulders_press: ['Overhead Press', 'Seated Dumbbell Press', 'Standing Dumbbell Press', 'Arnold Press', 'Machine Shoulder Press'],
+  shoulders_lateral: ['Dumbbell Lateral Raise', 'Cable Lateral Raise', 'Machine Lateral Raise', 'Leaning Cable Lateral Raise'],
+  shoulders_rear: ['Face Pull', 'Reverse Pec Deck', 'Bent-Over Dumbbell Fly', 'Cable Rear Delt Fly', 'Rear Delt Row'],
+  chest_press: ['Barbell Bench Press', 'Incline Barbell Bench Press', 'Dumbbell Bench Press', 'Incline Dumbbell Press', 'Weighted Dips', 'Bodyweight Dips', 'Machine Chest Press'],
+  chest_isolation: ['Cable Flyes', 'Dumbbell Flyes', 'Pec Deck Machine', 'Incline Cable Flyes'],
+  legs_quad: ['Leg Extension', 'Single-Leg Extension', 'Leg Press', 'Hack Squat Machine', 'Bulgarian Split Squat'],
+  legs_hamstring: ['Leg Curl', 'Seated Leg Curl', 'Lying Leg Curl', 'Nordic Curl', 'Romanian Deadlift', 'Dumbbell Romanian Deadlift'],
+  legs_glutes: ['Hip Thrust', 'Barbell Glute Bridge', 'Cable Pull-Through'],
+  legs_calves: ['Standing Calf Raise', 'Seated Calf Raise', 'Leg Press Calf Raise'],
+  arms_biceps: ['Barbell Curl', 'EZ-Bar Curl', 'Dumbbell Curl', 'Hammer Curl', 'Incline Dumbbell Curl', 'Cable Curl', 'Preacher Curl'],
+  arms_triceps: ['Close-Grip Bench Press', 'Dumbbell Overhead Extension', 'Cable Tricep Pushdown', 'Rope Tricep Pushdown', 'Overhead Cable Extension', 'Skull Crusher'],
+  core: ['Plank', 'Ab Wheel Rollout', 'Cable Crunch', 'Pallof Press', 'Side Plank']
+};
+
+// v7.25: Map exercises to categories for intelligent swapping
+const EXERCISE_CATEGORIES = {
+  'Lat Pulldown': 'back_vertical', 'Wide-Grip Lat Pulldown': 'back_vertical', 'Close-Grip Lat Pulldown': 'back_vertical',
+  'Pull-ups': 'back_vertical', 'Weighted Pull-ups': 'back_vertical', 'Chin-ups': 'back_vertical',
+  'Barbell Row': 'back_horizontal', 'Pendlay Row': 'back_horizontal', 'T-Bar Row': 'back_horizontal',
+  'Dumbbell Row': 'back_horizontal', 'Chest-Supported Row': 'back_horizontal', 'Seated Cable Row': 'back_horizontal', 'Machine Row': 'back_horizontal',
+  'Dumbbell Lateral Raise': 'shoulders_lateral', 'Cable Lateral Raise': 'shoulders_lateral', 'Machine Lateral Raise': 'shoulders_lateral',
+  'Face Pull': 'shoulders_rear', 'Reverse Pec Deck': 'shoulders_rear', 'Bent-Over Dumbbell Fly': 'shoulders_rear', 'Cable Rear Delt Fly': 'shoulders_rear', 'Rear Delt Row': 'shoulders_rear',
+  'Overhead Press': 'shoulders_press', 'Seated Dumbbell Press': 'shoulders_press', 'Standing Dumbbell Press': 'shoulders_press', 'Arnold Press': 'shoulders_press',
+  'Cable Flyes': 'chest_isolation', 'Dumbbell Flyes': 'chest_isolation', 'Pec Deck Machine': 'chest_isolation',
+  'Leg Extension': 'legs_quad', 'Single-Leg Extension': 'legs_quad', 'Leg Press': 'legs_quad',
+  'Leg Curl': 'legs_hamstring', 'Seated Leg Curl': 'legs_hamstring', 'Lying Leg Curl': 'legs_hamstring', 'Nordic Curl': 'legs_hamstring',
+  'Hip Thrust': 'legs_glutes', 'Barbell Glute Bridge': 'legs_glutes', 'Cable Pull-Through': 'legs_glutes',
+  'Standing Calf Raise': 'legs_calves', 'Seated Calf Raise': 'legs_calves',
+  'Barbell Curl': 'arms_biceps', 'EZ-Bar Curl': 'arms_biceps', 'Dumbbell Curl': 'arms_biceps', 'Hammer Curl': 'arms_biceps', 'Cable Curl': 'arms_biceps', 'Preacher Curl': 'arms_biceps',
+  'Cable Tricep Pushdown': 'arms_triceps', 'Rope Tricep Pushdown': 'arms_triceps', 'Dumbbell Overhead Extension': 'arms_triceps', 'Skull Crusher': 'arms_triceps',
+  'Plank': 'core', 'Ab Wheel Rollout': 'core', 'Cable Crunch': 'core', 'Pallof Press': 'core'
+};
+
 function inferSwapFamily(exName, liftKey) {
   const n = String(exName || '').toLowerCase();
   const lk = String(liftKey || '').toLowerCase();
@@ -333,19 +370,38 @@ function inferSwapFamily(exName, liftKey) {
 function getSwapOptionsForExercise(ex, dayPlan) {
   const lk = ex.liftKey || dayPlan.liftKey || '';
   const family = inferSwapFamily(ex.name, lk);
-  const pool = SWAP_POOLS[family] ? [...SWAP_POOLS[family]] : [];
+  
+  // v7.25: Check if this is an accessory exercise with a category
+  const category = EXERCISE_CATEGORIES[ex.name];
+  
+  let pool = [];
+  
+  if (category && ACCESSORY_DATABASE[category]) {
+    // Use accessory database for recognized exercises
+    pool = ACCESSORY_DATABASE[category].map(name => ({ name, liftKey: '' }));
+  } else if (SWAP_POOLS[family]) {
+    // Use Olympic lift pools for comp lifts
+    pool = [...SWAP_POOLS[family]];
+  }
+  
+  // Ensure current exercise is in the list
   if (!pool.some(o => o.name === ex.name)) {
     pool.unshift({ name: ex.name, liftKey: lk });
   }
+  
+  // Remove duplicates
   const uniq = [];
   pool.forEach(o => {
     if (!uniq.some(u => u.name === o.name)) uniq.push(o);
   });
+  
+  // Move current exercise to top
   const currentIdx = uniq.findIndex(o => o.name === ex.name);
   if (currentIdx > 0) {
     const cur = uniq.splice(currentIdx, 1)[0];
     uniq.unshift(cur);
   }
+  
   return uniq;
 }
 
