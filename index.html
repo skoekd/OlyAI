@@ -809,7 +809,7 @@ body{ overflow-x:hidden; }
 <details class="setup-section-collapsible" style="margin-top:16px">
 <summary style="cursor:pointer;list-style:none;padding:16px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:12px;display:flex;align-items:center;justify-content:space-between;transition:all 0.2s">
 <div style="display:flex;align-items:center;gap:12px">
-<span class="section-number">1</span>
+<span style="background:rgba(59,130,246,0.15);color:rgba(59,130,246,1);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;">OPTIONAL</span>
 <div>
 <div class="section-title">Program Preferences</div>
 <div class="section-desc">Optional: streamline how the program feels day-to-day (volume, blocks, auto-regulation).</div>
@@ -894,17 +894,11 @@ body{ overflow-x:hidden; }
       Note: Heavy lifts (85%+) will still use 5 minutes automatically
     </div>
   </div>
-</div>
-</details>
 
-<!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
-<!-- Athlete Details (NEW) -->
-<details class="card" style="margin-top:16px">
-<summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">
-<span style="font-weight:700">Athlete Details (optional)</span>
-<span style="opacity:.75;font-size:12px">Tap to expand/collapse</span>
-</summary>
-<div style="margin-top:12px">
+  <!-- Athlete Details moved inside Program Preferences -->
+  <details style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:16px">
+  <summary style="list-style:none;cursor:pointer;padding:8px 0;font-weight:600">Athlete Details (optional) <span style="opacity:0.5;font-size:12px;margin-left:8px">▼ Expand</span></summary>
+  <div style="margin-top:12px">
 <div class="label-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
 <div style="font-weight:600">Basics</div>
 <button aria-label="Athlete details info" class="info-btn" onclick="showInfo('athletedetails')" type="button">ⓘ</button>
@@ -1024,7 +1018,12 @@ body{ overflow-x:hidden; }
 </div>
 </div>
 
+  </div>
+  </details>
+
 </details>
+
+<!-- ===== Advanced Programming (v10) moved up so you can't miss it ===== -->
 </div>
 </div>
 <!-- ===== End Advanced Programming ===== -->

@@ -1737,25 +1737,31 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
       if (aEl) {
         aEl.value = actionVal;
         aEl.addEventListener('change', () => {
-          // v7.23 FIX #4: Read and save the ACTUAL weight user entered
+          // v7.24 COMPLETE FIX: When action button clicked, calculate next sets from ACTUAL weight
           const actualWeight = Number(wEl.value);
+          const prescribedWeight = scheme[setIndex]?.targetWeight || 0;
           
-          // Save BOTH action AND actual weight
+          // Save the action and actual weight
           updateRec(setIndex, { 
             action: aEl.value, 
-            weight: actualWeight,  // CRITICAL: Save the weight user actually entered
+            weight: actualWeight,
             status: 'done' 
           });
           
-          // Recalculate subsequent sets based on actual weight + action
-          if (scheme[setIndex]?.tag === 'work' && scheme[setIndex]?.targetWeight && scheme[setIndex].targetWeight > 0) {
+          // Calculate next sets based on ACTUAL weight lifted, not prescribed
+          if (scheme[setIndex]?.tag === 'work' && actualWeight > 0) {
+            // Get the action adjustment percentage
+            const actionAdj = actionDelta(aEl.value);
+            
+            // Apply to ACTUAL weight, not prescribed
+            let baseWeight = actualWeight * (1 + actionAdj);
+            
+            // Update all subsequent work sets
             for (let j = setIndex + 1; j < scheme.length; j++) {
               if (scheme[j]?.tag !== 'work') continue;
-              if (!scheme[j]?.targetWeight || scheme[j].targetWeight === 0) continue;
               
-              // This now uses the saved actual weight from above
-              const nextAdj = computeCumulativeAdj(dayLog, exIndex, j, scheme);
-              const nextW = roundTo(scheme[j].targetWeight * (1 + nextAdj), p.units === 'kg' ? 1 : 1);
+              // Each subsequent set gets the action adjustment
+              const nextW = roundTo(baseWeight, p.units === 'kg' ? 1 : 1);
               const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
               if (nextRow) {
                 const nextWEl = nextRow.querySelector('[data-role="weight"]');
@@ -1764,6 +1770,9 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
                   updateRec(j, { weight: nextW });
                 }
               }
+              
+              // Next set starts from this weight
+              baseWeight = nextW;
             }
           }
         });
