@@ -693,7 +693,9 @@ const DEFAULT_PROFILE = () => ({
   },
   workingMaxes: { snatch: 72, cj: 90, fs: 117, bs: 135, pushPress: 0, strictPress: 0 },
   liftAdjustments: { snatch: 0, cj: 0, fs: 0, bs: 0, pushPress: 0, strictPress: 0 },
-  readinessLog: []
+  readinessLog: [],
+  // v7.28: Store user's actual accessory weights to recall later
+  accessoryWeights: {} // { 'Barbell Bench Press': 47, 'T-Bar Row': 75, ... }
 });
 
 const DEFAULT_STATE = () => ({
@@ -1649,27 +1651,36 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
     head.style.justifyContent = 'space-between';
     head.style.alignItems = 'center';
     
-    // v7.23 FIX #3: Calculate recommendation for accessories - IMPROVED
+    // v7.28: Calculate recommendation for accessories - Check saved weight FIRST
     let recommendationText = '';
     if (ex.recommendedPct && ex.recommendedPct > 0 && ex.liftKey) {
-      const baseMax = getBaseForExercise(ex.name, ex.liftKey, p);
-      const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 1 : 1) : 0;
+      // Check if user has a saved weight for this exercise
+      const savedWeight = p.accessoryWeights?.[ex.name];
       
-      // Expand lift abbreviations for clarity
-      const liftNames = {
-        'snatch': 'Snatch',
-        'cj': 'Clean & Jerk',
-        'fs': 'Front Squat',
-        'bs': 'Back Squat',
-        'pushPress': 'Push Press',
-        'strictPress': 'Strict Press'
-      };
-      const fullLiftName = liftNames[ex.liftKey] || ex.liftKey;
-      const pctText = Math.round(ex.recommendedPct * 100);
-      
-      recommendationText = recWeight > 0 
-        ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border-left:3px solid rgba(59,130,246,0.4);border-radius:6px;font-size:14px;line-height:1.5"><span style="font-weight:600;color:rgba(59,130,246,1)">Recommended:</span> ${pctText}% of ${fullLiftName} <span style="opacity:0.8">(~${recWeight}${p.units || 'kg'})</span></div>` 
-        : (ex.description ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border-left:3px solid rgba(59,130,246,0.4);border-radius:6px;font-size:14px">${ex.description}</div>` : '');
+      if (savedWeight && savedWeight > 0) {
+        // Show saved weight (user has done this exercise before)
+        recommendationText = `<div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border-left:3px solid rgba(16,185,129,0.4);border-radius:6px;font-size:14px;line-height:1.5"><span style="font-weight:600;color:rgba(16,185,129,1)">Last used:</span> ${savedWeight}${p.units || 'kg'}</div>`;
+      } else {
+        // Show recommendation (first time doing this exercise)
+        const baseMax = getBaseForExercise(ex.name, ex.liftKey, p);
+        const recWeight = baseMax ? roundTo(baseMax * ex.recommendedPct, p.units === 'kg' ? 1 : 1) : 0;
+        
+        // Expand lift abbreviations for clarity
+        const liftNames = {
+          'snatch': 'Snatch',
+          'cj': 'Clean & Jerk',
+          'fs': 'Front Squat',
+          'bs': 'Back Squat',
+          'pushPress': 'Push Press',
+          'strictPress': 'Strict Press'
+        };
+        const fullLiftName = liftNames[ex.liftKey] || ex.liftKey;
+        const pctText = Math.round(ex.recommendedPct * 100);
+        
+        recommendationText = recWeight > 0 
+          ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border-left:3px solid rgba(59,130,246,0.4);border-radius:6px;font-size:14px;line-height:1.5"><span style="font-weight:600;color:rgba(59,130,246,1)">Recommended:</span> ${pctText}% of ${fullLiftName} <span style="opacity:0.8">(~${recWeight}${p.units || 'kg'})</span></div>` 
+          : (ex.description ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border-left:3px solid rgba(59,130,246,0.4);border-radius:6px;font-size:14px">${ex.description}</div>` : '');
+      }
     } else if (ex.description) {
       recommendationText = `<div style="margin-top:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border-left:3px solid rgba(59,130,246,0.4);border-radius:6px;font-size:14px">${ex.description}</div>`;
     }
@@ -1891,6 +1902,15 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
             if (Number.isFinite(entered) && entered > 0 && Number.isFinite(prescribed) && prescribed > 0) {
               const off = clamp((entered / prescribed) - 1, -0.10, 0.10);
               setWeightOffsetOverride(dayLog, exIndex, off);
+            }
+            
+            // v7.28: Save accessory weight for future reference
+            // Only save if this is an accessory exercise (has recommendedPct but no pct)
+            if (ex.recommendedPct && ex.recommendedPct > 0 && !ex.pct && entered > 0) {
+              if (!p.accessoryWeights) p.accessoryWeights = {};
+              p.accessoryWeights[ex.name] = entered;
+              saveState();
+              console.log('💾 Saved accessory weight:', ex.name, '→', entered, p.units);
             }
           }
         });
@@ -2616,19 +2636,48 @@ function renderHistory() {
     card.querySelector('[data-action="redo"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (confirm(`Redo this entire ${block.blockLength}-week block from scratch?\n\nThis will reset all completed sessions and start fresh from Week 1, Day 1.`)) {
-        const freshBlock = JSON.parse(JSON.stringify(block));
+        console.log('🔄 REDO CLICKED - Starting fresh block process');
         
-        // Reset all completion flags
-        freshBlock.weeks.forEach(week => {
-          week.days.forEach(day => {
-            day.completed = false;
-            day.completedDate = null;
-          });
-        });
+        // CRITICAL FIX: Transform history block structure back to currentBlock format
+        // History blocks have: days.exercises (simplified)
+        // Current blocks need: days.work (full exercise objects with pct, liftKey, etc.)
         
-        // Reset to today's date and Week 1
-        freshBlock.startDateISO = todayISO();
-        freshBlock.currentWeek = 0;  // Week 1 (0-indexed)
+        const freshBlock = {
+          seed: block.blockSeed || Date.now(),
+          profileName: block.profileName,
+          startDateISO: todayISO(),
+          programType: block.programType,
+          blockLength: block.blockLength,
+          weeks: block.weeks.map(week => ({
+            weekIndex: week.weekIndex,
+            phase: week.phase,
+            intensity: week.intensity || 0.75, // Reasonable default
+            volFactor: week.volFactor || 0.8,  // Reasonable default
+            days: week.days.map(day => ({
+              title: day.title,
+              dow: day.dow,
+              kind: day.kind || (day.title.includes('Accessory') || day.title.includes('Hypertrophy') ? 'accessory' : 'snatch'),
+              liftKey: day.liftKey || '',
+              completed: false, // Reset completion
+              completedDate: null,
+              work: day.exercises.map(ex => ({
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                pct: ex.prescribedPct ? ex.prescribedPct / 100 : 0,
+                liftKey: ex.liftKey || '',
+                tag: ex.tag || 'work',
+                targetRIR: ex.targetRIR || null,
+                recommendedPct: ex.recommendedPct || 0,
+                description: ex.description || ''
+              }))
+            }))
+          }))
+        };
+        
+        console.log('✅ Transformed block structure - weeks:', freshBlock.weeks.length);
+        console.log('✅ Week 1 days:', freshBlock.weeks[0]?.days.length);
+        console.log('✅ Day 1 work exercises:', freshBlock.weeks[0]?.days[0]?.work.length);
         
         // Set as current block
         state.currentBlock = freshBlock;
@@ -2638,10 +2687,9 @@ function renderHistory() {
         ui.weekIndex = 0;
         
         saveState();
-        
-        // Render and navigate to Workout tab to show the fresh block
         renderDashboard();
         renderWorkout();
+        
         notify('✅ Block reset! Starting fresh from Week 1, Day 1.');
         showPage('Workout');  // Show Workout tab with fresh block
       }
@@ -3068,28 +3116,6 @@ function wireButtons() {
     if (!state.currentBlock) return;
     ui.weekIndex = clamp(ui.weekIndex + 1, 0, state.currentBlock.weeks.length - 1);
     renderWorkout();
-  });
-  // v7.24: Full state export (not just history)
-  $('btnExport')?.addEventListener('click', () => {
-    const exportData = {
-      version: 'v7.24',
-      exportDate: new Date().toISOString(),
-      currentBlock: state.currentBlock,
-      blockHistory: state.blockHistory || [],
-      history: state.history || [],
-      profiles: state.profiles,
-      activeProfile: state.activeProfile,
-      setLogs: state.setLogs || {}
-    };
-    const data = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `liftai_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    notify('✅ Data exported successfully!');
   });
   
   // v7.24: Import button handler
