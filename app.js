@@ -710,6 +710,53 @@ const DEFAULT_STATE = () => ({
 let state = loadState();
 let ui = { currentPage: 'Setup', weekIndex: 0 };
 
+/**
+ * Calculate appropriate pull percentage offset based on phase and lift type
+ * Research: Catalyst Athletics, USAW, Soviet methodology, Torokhtiy programs
+ * 
+ * Olympic lifting pulls should be prescribed as percentages of the competition lift,
+ * with the offset varying by training phase:
+ * 
+ * ACCUMULATION: Lighter pulls (volume, technique focus)
+ * - Snatch Pulls: +5% (70-80% of Snatch)
+ * - Clean Pulls: +8% (75-85% of Clean/C&J)
+ * 
+ * INTENSIFICATION: Heavier pulls (strength development)
+ * - Snatch Pulls: +10% (85-95% of Snatch)
+ * - Clean Pulls: +15% (90-100% of Clean/C&J)
+ * 
+ * COMPETITION: Moderate pulls (peak performance, maintenance)
+ * - Snatch Pulls: +8% (88-98% of Snatch)
+ * - Clean Pulls: +12% (92-102% of Clean/C&J)
+ * 
+ * @param {string} phase - Training phase (accumulation, intensification, competition)
+ * @param {string} pullType - 'snatch' or 'clean'
+ * @returns {number} Percentage offset to add to base intensity
+ */
+function getPullOffset(phase, pullType) {
+  // Snatch pulls are generally lighter (more technique-limited)
+  // Clean pulls can be heavier (more strength-limited)
+  
+  if (phase === 'accumulation') {
+    // Focus: Volume, technique, position
+    // Research range: Snatch 70-80%, Clean 75-85%
+    return pullType === 'snatch' ? 0.05 : 0.08;
+  } 
+  else if (phase === 'intensification') {
+    // Focus: Strength development
+    // Research range: Snatch 85-95%, Clean 90-100%
+    return pullType === 'snatch' ? 0.10 : 0.15;
+  } 
+  else if (phase === 'competition' || phase === 'peaking') {
+    // Focus: Peak performance, maintenance
+    // Research range: Snatch 88-98%, Clean 92-102%
+    return pullType === 'snatch' ? 0.08 : 0.12;
+  }
+  
+  // Default fallback for unknown phases
+  return pullType === 'snatch' ? 0.08 : 0.10;
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   const parsed = raw ? safeJsonParse(raw, null) : null;
@@ -1099,12 +1146,12 @@ function makeWeekPlan(profile, weekIndex) {
     const templates = [
       { title: 'Snatch Focus', kind: 'snatch', main: 'Snatch', liftKey: 'snatch', work: [
         { name: chooseVariation('snatch', profile, weekIndex, phase, 'snatch_main', dayIndex).name, liftKey: 'snatch', sets: Math.round(5 * volFactor), reps: 2, pct: intensity },
-        { name: chooseVariation('pull_snatch', profile, weekIndex, phase, 'snatch_pull', dayIndex).name, liftKey: 'snatch', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.10, 0.60, 0.95) },
+        { name: chooseVariation('pull_snatch', profile, weekIndex, phase, 'snatch_pull', dayIndex).name, liftKey: 'snatch', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + getPullOffset(phase, 'snatch'), 0.65, 1.00) },
         { name: chooseVariation('bs', profile, weekIndex, phase, 'back_squat', dayIndex).name, liftKey: 'bs', sets: Math.round(4 * volFactor), reps: 5, pct: clamp(intensity + 0.05, 0.55, 0.92) }
       ]},
       { title: 'Clean & Jerk Focus', kind: 'cj', main: 'Clean & Jerk', liftKey: 'cj', work: [
         { name: chooseVariation('cj', profile, weekIndex, phase, 'cj_main', dayIndex).name, liftKey: 'cj', sets: Math.round(4 * volFactor), reps: 1, pct: clamp(intensity + 0.05, 0.60, 0.95) },
-        { name: chooseVariation('pull_clean', profile, weekIndex, phase, 'clean_pull', dayIndex).name, liftKey: 'cj', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.12, 0.60, 0.98) },
+        { name: chooseVariation('pull_clean', profile, weekIndex, phase, 'clean_pull', dayIndex).name, liftKey: 'cj', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + getPullOffset(phase, 'clean'), 0.70, 1.05) },
         { name: chooseVariation('fs', profile, weekIndex, phase, 'front_squat', dayIndex).name, liftKey: 'fs', sets: Math.round(4 * volFactor), reps: 3, pct: clamp(intensity + 0.08, 0.55, 0.92) }
       ]},
       { title: 'Strength + Positions', kind: 'strength', main: 'Back Squat', liftKey: 'bs', work: [
@@ -1253,7 +1300,7 @@ function makeWeekPlan(profile, weekIndex) {
                          s.kind === 'cj' ? chooseVariation('pull_clean', profile, weekIndex, phase, `${s.kind}_support`) :
                          chooseVariation('bs', profile, weekIndex, phase, `${s.kind}_support`);
       s.work = [...s.work,
-        { name: supportLift.name, liftKey: supportLift.liftKey, sets: Math.round(3 * volFactor), reps: 3, pct: clamp(intensity + 0.15, 0.60, 0.98), tag: 'strength' }
+        { name: supportLift.name, liftKey: supportLift.liftKey, sets: Math.round(3 * volFactor), reps: 3, pct: clamp(intensity + getPullOffset(phase, s.kind === 'snatch' ? 'snatch' : 'clean'), 0.65, 1.05), tag: 'strength' }
       ];
     }
     
