@@ -954,17 +954,31 @@ function pickFromPool(pool, key, weekIndex) {
   return pool[idx];
 }
 
-function chooseHypertrophyExercise(poolName, profile, weekIndex, slotKey) {
+// v7.30: Duplicate-aware pool picker
+function pickFromPoolExcluding(pool, key, weekIndex, excludeNames = []) {
+  if (!pool || pool.length === 0) return null;
+  
+  // Filter out excluded exercises
+  const availablePool = pool.filter(ex => !excludeNames.includes(ex.name));
+  if (availablePool.length === 0) return pool[0]; // Fallback if all excluded
+  
+  const h = hash32(String(key) + '|w' + String(weekIndex));
+  const idx = (h % (availablePool.length * 7)) % availablePool.length;
+  return availablePool[idx];
+}
+
+function chooseHypertrophyExercise(poolName, profile, weekIndex, slotKey, excludeNames = []) {
   const pool = HYPERTROPHY_POOLS[poolName] || [];
   if (pool.length === 0) return { name: poolName, refLift: '', refPct: 0, description: '' };
   
   // v7.11 FIX: Same exercise for ENTIRE BLOCK (4 weeks)
   // Remove weekIndex from key so exercise doesn't change weekly
   // This allows proper progression tracking
+  // v7.30 FIX: Add duplicate prevention via excludeNames
   const seed = Number(profile.lastBlockSeed || 0) || blockSeed() || 0;
   const key = `${seed}|hyp|${poolName}|${slotKey}|${profile.programType || 'general'}`;
   // Note: weekIndex removed - same exercise all 4 weeks
-  return pickFromPool(pool, key, 0) || pool[0];  // Use week 0 always
+  return pickFromPoolExcluding(pool, key, 0, excludeNames) || pool[0];  // Use week 0 always
 }
 
 // v7.11 NEW: Calculate hypertrophy progression parameters
@@ -993,8 +1007,9 @@ function getHypertrophyProgression(weekIndex, phase) {
 }
 
 // v7.11 NEW: Helper to create hypertrophy exercise with weight guidance
-function makeHypExercise(poolName, profile, weekIndex, slotKey, sets, reps, baseRIR, hypProg) {
-  const ex = chooseHypertrophyExercise(poolName, profile, weekIndex, slotKey);
+// v7.30 FIX: Added excludeNames parameter for duplicate prevention
+function makeHypExercise(poolName, profile, weekIndex, slotKey, sets, reps, baseRIR, hypProg, excludeNames = []) {
+  const ex = chooseHypertrophyExercise(poolName, profile, weekIndex, slotKey, excludeNames);
   return {
     name: ex.name,
     sets: sets,
@@ -1205,11 +1220,14 @@ function makeWeekPlan(profile, weekIndex) {
         s.title = 'Hypertrophy + Pump';
         const dayKey = `d${si}`; // Use session index to differentiate days
         if (duration >= 90) {
+          // v7.30 FIX: Prevent duplicates from same pool
+          const sh1 = makeHypExercise('shoulders', profile, weekIndex, `hyp_acc_sh1_${dayKey}`, hypSets, 10, 2, hypProg);
+          const sh2 = makeHypExercise('shoulders', profile, weekIndex, `hyp_acc_sh2_${dayKey}`, hypSets, 15, 3, hypProg, [sh1.name]);
           s.work = [
             makeHypExercise('upperPush', profile, weekIndex, `hyp_acc_push_${dayKey}`, hypSets + 1, hypReps, 2, hypProg),
             makeHypExercise('upperPull', profile, weekIndex, `hyp_acc_pull_${dayKey}`, hypSets + 1, hypReps, 2, hypProg),
-            makeHypExercise('shoulders', profile, weekIndex, `hyp_acc_sh1_${dayKey}`, hypSets, 10, 2, hypProg),
-            makeHypExercise('shoulders', profile, weekIndex, `hyp_acc_sh2_${dayKey}`, hypSets, 15, 3, hypProg),
+            sh1,
+            sh2,
             makeHypExercise('lowerQuad', profile, weekIndex, `hyp_acc_quad_${dayKey}`, hypSets, 15, 3, hypProg),
             makeHypExercise('lowerPosterior', profile, weekIndex, `hyp_acc_post_${dayKey}`, hypSets, hypReps, 2, hypProg),
             { name: 'Core Circuit', sets: 3, reps: 1, pct: 0, tag: 'core' }
@@ -1238,9 +1256,12 @@ function makeWeekPlan(profile, weekIndex) {
         }
       } else if (s.kind === 'cj') {
         if (duration >= 90) {
+          // v7.30 FIX: Prevent duplicates from same pool
+          const pull1 = makeHypExercise('upperPull', profile, weekIndex, 'hyp_cj_pull1', hypSets, hypReps - 2, 2, hypProg);
+          const pull2 = makeHypExercise('upperPull', profile, weekIndex, 'hyp_cj_pull2', hypSets, hypReps, 2, hypProg, [pull1.name]);
           s.work = [...s.work,
-            makeHypExercise('upperPull', profile, weekIndex, 'hyp_cj_pull1', hypSets, hypReps - 2, 2, hypProg),
-            makeHypExercise('upperPull', profile, weekIndex, 'hyp_cj_pull2', hypSets, hypReps, 2, hypProg),
+            pull1,
+            pull2,
             makeHypExercise('shoulders', profile, weekIndex, 'hyp_cj_sh', hypSets, hypReps, 2, hypProg),
             makeHypExercise('arms', profile, weekIndex, 'hyp_cj_arm1', hypSets, hypReps, 3, hypProg)
           ];
@@ -1252,9 +1273,12 @@ function makeWeekPlan(profile, weekIndex) {
         }
       } else if (s.kind === 'strength') {
         if (duration >= 90) {
+          // v7.30 FIX: Prevent duplicates from same pool
+          const post1 = makeHypExercise('lowerPosterior', profile, weekIndex, 'hyp_st_post1', hypSets, hypReps - 2, 2, hypProg);
+          const post2 = makeHypExercise('lowerPosterior', profile, weekIndex, 'hyp_st_post2', hypSets, hypReps, 2, hypProg, [post1.name]);
           s.work = [...s.work,
-            makeHypExercise('lowerPosterior', profile, weekIndex, 'hyp_st_post1', hypSets, hypReps - 2, 2, hypProg),
-            makeHypExercise('lowerPosterior', profile, weekIndex, 'hyp_st_post2', hypSets, hypReps, 2, hypProg),
+            post1,
+            post2,
             makeHypExercise('lowerQuad', profile, weekIndex, 'hyp_st_quad', hypSets, hypReps - 2, 2, hypProg),
             { name: 'Calf Raises', sets: 4, reps: 15, pct: 0, tag: 'hypertrophy' }
           ];
