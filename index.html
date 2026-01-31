@@ -1191,9 +1191,11 @@ body{ overflow-x:hidden; }
 <div class="card-title">Overview</div>
 <div class="card-subtitle" id="dashboardSubtitle">—</div>
 <div class="stats-grid" id="dashboardStats" style="margin-top:14px"></div>
-<div class="flex" style="margin-top:14px">
+<div class="flex" style="margin-top:14px;gap:8px;flex-wrap:wrap">
 <button class="success" id="btnGoWorkout" style="flex:1">🏋️ Go to Workout</button>
-<button class="secondary" id="btnLogReadiness" title="Log readiness">💪 Readiness</button>
+<button class="secondary" id="btnExportCurrentBlock" title="Export current block">📤 Export</button>
+<button class="secondary" id="btnImportBlock" title="Import block from CSV">📥 Import</button>
+<button class="secondary" id="btnLogReadiness" title="Log readiness">💪</button>
 </div>
 </div>
 <div class="card">
@@ -1204,6 +1206,8 @@ body{ overflow-x:hidden; }
 </div>
 
 </section>
+<input type="file" id="fileImportBlock" accept=".csv" style="display:none" />
+
 <!-- Workout Page -->
 <section class="hidden" id="pageWorkout">
 <div class="workout-section" id="tabWorkout">
@@ -1235,12 +1239,14 @@ body{ overflow-x:hidden; }
 <div class="flex-between" style="margin-bottom:16px">
 <div><div class="card-title">Training History</div><div class="card-subtitle">Completed sessions & saved blocks</div></div>
 <div style="display:flex;gap:8px">
-<button class="secondary small" id="btnImport">📥 Import</button>
+<button class="secondary small" id="btnImportCSV">📋 Import CSV</button>
+<button class="secondary small" id="btnImport">📥 Import JSON</button>
 </div>
 </div>
 <div id="historyList"></div>
 </div>
 <input type="file" id="fileImport" accept=".json" style="display:none" />
+<input type="file" id="fileImportCSV" accept=".csv" style="display:none" />
 </section>
 <section class="page hidden" id="pageSettings">
 <div class="card">
