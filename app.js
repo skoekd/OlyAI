@@ -3818,7 +3818,11 @@ function wireButtons() {
   });
   $('btnGoWorkout')?.addEventListener('click', () => showPage('Workout'));
   
-  // v7.35: Export current block
+  // ========================================
+  // v7.41: Dashboard Import/Export Buttons
+  // ========================================
+  
+  // Export current block
   $('btnExportCurrentBlock')?.addEventListener('click', () => {
     const block = state.currentBlock;
     if (!block) {
@@ -3828,60 +3832,202 @@ function wireButtons() {
     exportBlock(block);
   });
   
-  // v7.35: Import block button
+  // Import block (uses unified system)
   $('btnImportBlock')?.addEventListener('click', () => {
-    const fileInput = $('fileImportBlock');
-    if (fileInput) fileInput.click();
+    console.log('🔘 Dashboard Import button clicked');
+    triggerUnifiedImport('Dashboard');
   });
   
-  // v7.35: Import block file handler
+  // ========================================
+  // v7.41: History Import Button
+  // NEW: Adds import capability to History tab
+  // ========================================
+  
+  $('btnImportBlock_History')?.addEventListener('click', () => {
+    console.log('🔘 History Import button clicked');
+    triggerUnifiedImport('History');
+  });
+  
+  // ========================================
+  // v7.41: UNIFIED IMPORT SYSTEM
+  // Location-agnostic import that updates ALL tabs
+  // ========================================
+  
+  /**
+   * Unified Training Block Import Handler
+   * Can be triggered from Dashboard, History, or any tab
+   * Updates global state and refreshes ALL views
+   * @param {string} csvText - The CSV content
+   * @param {string} sourceTab - Which tab triggered the import
+   * @returns {boolean} - Success status
+   */
+  function unifiedBlockImport(csvText, sourceTab = 'unknown') {
+    console.log(`📥 UNIFIED IMPORT: Starting from ${sourceTab} tab`);
+    console.log(`📥 UNIFIED IMPORT: CSV length: ${csvText.length} chars`);
+    
+    try {
+      // Parse the CSV using existing importBlock function
+      const result = importBlock(csvText);
+      
+      if (!result.success) {
+        console.error(`📥 UNIFIED IMPORT: Parse failed:`, result.error);
+        alert(`❌ Import failed: ${result.error}\n\nMake sure you're importing a Training Block CSV.\n\nExpected format:\nWeek,Day,Exercise,Sets,Reps,Percentage,Notes`);
+        return false;
+      }
+      
+      const block = result.block;
+      console.log(`📥 UNIFIED IMPORT: Parse successful`);
+      console.log(`📥 UNIFIED IMPORT: Block details:`, {
+        programType: block.programType,
+        weeks: block.weeks.length,
+        startDate: block.startDateISO
+      });
+      
+      // Calculate stats for confirmation dialog
+      const daysCount = block.weeks.reduce((sum, w) => sum + w.days.length, 0);
+      const exercisesCount = block.weeks.reduce((sum, w) => 
+        sum + w.days.reduce((s, d) => s + (d.work?.length || 0), 0), 0);
+      
+      console.log(`📥 UNIFIED IMPORT: Stats - ${daysCount} days, ${exercisesCount} exercises`);
+      
+      // Confirm with user
+      const confirmMsg = `Import training block?\n\n` +
+        `• Program: ${block.programType}\n` +
+        `• Length: ${block.weeks.length} weeks\n` +
+        `• Training days: ${daysCount}\n` +
+        `• Exercises: ${exercisesCount}\n\n` +
+        `This will REPLACE your current training block.`;
+      
+      if (!confirm(confirmMsg)) {
+        console.log(`📥 UNIFIED IMPORT: User cancelled`);
+        return false;
+      }
+      
+      // ========================================
+      // CRITICAL SECTION: Update Global State
+      // This is the single source of truth
+      // ========================================
+      console.log(`📥 UNIFIED IMPORT: Updating global state...`);
+      
+      state.currentBlock = block;
+      ui.weekIndex = 0; // Reset to week 1
+      
+      console.log(`📥 UNIFIED IMPORT: ✓ state.currentBlock updated`);
+      console.log(`📥 UNIFIED IMPORT: ✓ programType = "${state.currentBlock.programType}"`);
+      
+      // ========================================
+      // CRITICAL SECTION: Persist to localStorage
+      // Ensures data survives page refresh
+      // ========================================
+      console.log(`📥 UNIFIED IMPORT: Saving to localStorage...`);
+      saveState();
+      console.log(`📥 UNIFIED IMPORT: ✓ localStorage updated`);
+      
+      // ========================================
+      // CRITICAL SECTION: Refresh ALL Views
+      // MUST happen in this order
+      // ========================================
+      console.log(`📥 UNIFIED IMPORT: Refreshing all views...`);
+      
+      // 1. Dashboard (shows block summary)
+      renderDashboard();
+      console.log(`📥 UNIFIED IMPORT: ✓ Dashboard rendered`);
+      
+      // 2. Workout (shows training plan)
+      renderWorkout();
+      console.log(`📥 UNIFIED IMPORT: ✓ Workout rendered`);
+      
+      // 3. History (may show current block indicator)
+      renderHistory();
+      console.log(`📥 UNIFIED IMPORT: ✓ History rendered`);
+      
+      // ========================================
+      // Navigate to Workout tab
+      // ========================================
+      console.log(`📥 UNIFIED IMPORT: Navigating to Workout...`);
+      showPage('Workout');
+      
+      // Force final render after navigation completes
+      // This ensures the Workout tab is fully refreshed
+      setTimeout(() => {
+        renderWorkout();
+        renderDashboard(); // v7.41: Also re-render Dashboard to fix desync
+        console.log(`📥 UNIFIED IMPORT: ✓ Final render complete`);
+        console.log(`📥 UNIFIED IMPORT: Final verification:`, {
+          currentBlock: !!state.currentBlock,
+          programType: state.currentBlock?.programType,
+          weeks: state.currentBlock?.weeks?.length
+        });
+      }, 100);
+      
+      // Success notification
+      notify(`✅ Training block imported successfully!`);
+      console.log(`📥 UNIFIED IMPORT: ✅ Import complete!`);
+      
+      return true;
+      
+    } catch (err) {
+      console.error(`📥 UNIFIED IMPORT: Exception:`, err);
+      console.error(`📥 UNIFIED IMPORT: Stack:`, err.stack);
+      alert(`❌ Import failed: ${err.message}\n\nCheck the browser console (F12) for details.`);
+      return false;
+    }
+  }
+  
+  /**
+   * Trigger file picker for unified import
+   * Can be called from any tab
+   * @param {string} sourceTab - Identifies which tab triggered import
+   */
+  function triggerUnifiedImport(sourceTab = 'unknown') {
+    console.log(`📥 TRIGGER: Import requested from ${sourceTab}`);
+    const fileInput = $('fileImportBlock');
+    if (fileInput) {
+      // Store source for logging purposes
+      fileInput.dataset.sourceTab = sourceTab;
+      fileInput.click();
+      console.log(`📥 TRIGGER: File picker opened`);
+    } else {
+      console.error(`📥 TRIGGER: File input #fileImportBlock not found`);
+      alert('⚠️ Import button not properly initialized. Please refresh the page.');
+    }
+  }
+  
+  // ========================================
+  // v7.41: UNIFIED FILE INPUT HANDLER
+  // Single handler for ALL CSV imports
+  // ========================================
+  
   $('fileImportBlock')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log(`📥 FILE HANDLER: No file selected`);
+      return;
+    }
     
-    console.log('📥 Import Block: File selected', file.name, file.type, file.size);
+    const sourceTab = e.target.dataset.sourceTab || 'unknown';
+    console.log(`📥 FILE HANDLER: File selected from ${sourceTab}:`, file.name, file.size);
     
     const reader = new FileReader();
+    
     reader.onerror = (error) => {
-      console.error('📥 Import Block: FileReader error', error);
+      console.error(`📥 FILE HANDLER: FileReader error:`, error);
       alert(`❌ Failed to read file: ${error}`);
     };
     
     reader.onload = (event) => {
-      try {
-        const csvText = event.target.result;
-        console.log('📥 Import Block: File read successfully, length:', csvText.length);
-        console.log('📥 Import Block: First 200 chars:', csvText.substring(0, 200));
-        
-        const result = importBlock(csvText);
-        console.log('📥 Import Block: Import result:', result);
-        
-        if (result.success) {
-          const weeksCount = result.block.weeks.length;
-          const daysCount = result.block.weeks.reduce((sum, w) => sum + w.days.length, 0);
-          const exercisesCount = result.block.weeks.reduce((sum, w) => 
-            sum + w.days.reduce((s, d) => s + (d.work?.length || 0), 0), 0);
-          
-          if (confirm(`Import training block?\n\n• ${weeksCount} weeks\n• ${daysCount} training days\n• ${exercisesCount} exercises\n\nThis will REPLACE your current block.`)) {
-            state.currentBlock = result.block;
-            ui.weekIndex = 0;
-            saveState();
-            renderDashboard();
-            renderWorkout();
-            notify('✅ Training block imported successfully!');
-            showPage('Workout');
-          }
-        } else {
-          console.error('📥 Import Block: Import failed:', result.error);
-          alert(`❌ Import failed: ${result.error}\n\nMake sure you're importing a Training Block CSV (not workout history).\n\nExpected format:\nWeek,Day,Exercise,Sets,Reps,Percentage,Notes`);
-        }
-      } catch (err) {
-        console.error('📥 Import Block: Exception:', err);
-        alert(`❌ Import failed: ${err.message}\n\nCheck the browser console (F12) for details.`);
-      }
-      // Reset file input
+      const csvText = event.target.result;
+      console.log(`📥 FILE HANDLER: File read successfully, length: ${csvText.length}`);
+      console.log(`📥 FILE HANDLER: First 200 chars:`, csvText.substring(0, 200));
+      
+      // Call unified import handler
+      unifiedBlockImport(csvText, sourceTab);
+      
+      // Reset file input so same file can be selected again
       e.target.value = '';
+      delete e.target.dataset.sourceTab;
     };
+    
     reader.readAsText(file);
   });
   
@@ -4047,54 +4193,10 @@ function importCSV(csvText) {
     if (fileInput) fileInput.click();
   });
   
-  // v7.32: CSV Import button handler
-  $('btnImportCSV')?.addEventListener('click', () => {
-    const fileInput = $('fileImportCSV');
-    if (fileInput) fileInput.click();
-  });
+  // v7.41: Old workout log CSV import removed
+  // History tab now uses unified training block import via btnImportBlock_History
   
-  // v7.32: CSV Import handler
-  $('fileImportCSV')?.addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    console.log('📥 Import CSV History: File selected', file.name, file.type, file.size);
-    
-    const reader = new FileReader();
-    reader.onerror = (error) => {
-      console.error('📥 Import CSV History: FileReader error', error);
-      alert(`❌ Failed to read file: ${error}`);
-    };
-    
-    reader.onload = (event) => {
-      try {
-        const csvText = event.target.result;
-        console.log('📥 Import CSV History: File read successfully, length:', csvText.length);
-        console.log('📥 Import CSV History: First 200 chars:', csvText.substring(0, 200));
-        
-        const result = importCSV(csvText);
-        console.log('📥 Import CSV History: Import result:', result);
-        
-        if (result.success) {
-          alert(`✅ Import successful!\n\n${result.workouts} workouts imported\n${result.exercises} exercises logged\n\nNote: Check your maxes in Setup - they may have been updated based on imported data.`);
-          saveState();
-          renderHistory();
-          renderDashboard();
-        } else {
-          console.error('📥 Import CSV History: Import failed:', result.error);
-          alert(`❌ Import failed: ${result.error}\n\nMake sure you're importing Workout History CSV (not a training block).\n\nExpected format:\nDate,Exercise,Sets,Reps,Weight,RPE`);
-        }
-      } catch (err) {
-        console.error('📥 Import CSV History: Exception:', err);
-        alert(`❌ Import failed: ${err.message}\n\nCheck the browser console (F12) for details.`);
-      }
-      // Reset file input
-      e.target.value = '';
-    };
-    reader.readAsText(file);
-  });
-  
-  // v7.24: File import handler
+  // v7.24: File import handler (JSON)
   $('fileImport')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
