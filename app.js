@@ -1611,27 +1611,33 @@ function getBaseForExercise(exerciseName, liftKey, profile) {
 function getBaseForExerciseInternal(exerciseName, liftKey, profile) {
   const nameLower = (exerciseName || '').toLowerCase();
   
-  // Check for custom 1RM first
-  const customMapping = {
-    'power snatch': 'powerSnatch',
-    'power clean': 'powerClean',
-    'overhead squat': 'ohs',
-    'hang power snatch': 'hangPowerSnatch',
-    'hang snatch': 'hangSnatch',
-    'hang clean': 'hangClean'
-  };
-  
-  for (const [exercise, key] of Object.entries(customMapping)) {
-    if (nameLower.includes(exercise)) {
-      const customValue = profile.maxes?.[key];
-      if (customValue != null && customValue > 0) {
-        // Use custom 1RM with adjustments
-        const adj = (profile.liftAdjustments && profile.liftAdjustments[liftKey]) ? Number(profile.liftAdjustments[liftKey]) : 0;
-        const capped = clamp(adj, -0.05, 0.05);
-        return customValue * (1 + capped);
+  // v7.38 CRITICAL FIX: For complexes, ALWAYS use liftKey (primary lift), NOT custom 1RMs
+  // Complexes are limited by the hardest component (e.g., "Power Snatch + Snatch" limited by full Snatch)
+  // Using a custom Power Snatch 1RM would severely underload the complex
+  // Research: Complexes prescribed at 70-85% of PRIMARY lift 1RM (Catalyst Athletics)
+  if (!isComplex(exerciseName)) {
+    // Check for custom 1RM first (ONLY for non-complex exercises)
+    const customMapping = {
+      'power snatch': 'powerSnatch',
+      'power clean': 'powerClean',
+      'overhead squat': 'ohs',
+      'hang power snatch': 'hangPowerSnatch',
+      'hang snatch': 'hangSnatch',
+      'hang clean': 'hangClean'
+    };
+    
+    for (const [exercise, key] of Object.entries(customMapping)) {
+      if (nameLower.includes(exercise)) {
+        const customValue = profile.maxes?.[key];
+        if (customValue != null && customValue > 0) {
+          // Use custom 1RM with adjustments
+          const adj = (profile.liftAdjustments && profile.liftAdjustments[liftKey]) ? Number(profile.liftAdjustments[liftKey]) : 0;
+          const capped = clamp(adj, -0.05, 0.05);
+          return customValue * (1 + capped);
+        }
+        // If no custom value, fall through to ratio calculation
+        break;
       }
-      // If no custom value, fall through to ratio calculation
-      break;
     }
   }
   
@@ -1639,14 +1645,28 @@ function getBaseForExerciseInternal(exerciseName, liftKey, profile) {
     // Use TRUE MAX for competition lifts and technical variations
     const trueMax = (profile.maxes && profile.maxes[liftKey]) ? Number(profile.maxes[liftKey]) : 0;
     
-    // Apply research-based ratios for variations without custom values
+    // v7.39 CRITICAL FIX: Ratio logic for complexes vs. singles
+    // For COMPLEXES: ratio determined by PRIMARY lift (liftKey)
+    // For SINGLES: ratio determined by exercise variation
     let ratio = 1.0;
-    if (nameLower.includes('power snatch')) ratio = 0.88;
-    else if (nameLower.includes('power clean')) ratio = 0.90;
-    else if (nameLower.includes('overhead squat')) ratio = 0.85;
-    else if (nameLower.includes('hang power snatch')) ratio = 0.80;
-    else if (nameLower.includes('hang snatch') && !nameLower.includes('power')) ratio = 0.95;
-    else if (nameLower.includes('hang clean') && !nameLower.includes('power')) ratio = 0.95;
+    
+    if (isComplex(exerciseName)) {
+      // Complex exercises: ratio based on PRIMARY lift (liftKey)
+      // "Power Snatch + Snatch" with liftKey='snatch' → ratio = 1.0
+      // "Power Clean + Jerk" with liftKey='cj' → ratio = 1.0
+      // The limiting factor in a complex is the HARDEST component (the primary lift)
+      ratio = 1.0; // Always 1.0 for complexes (already has 5% complex reduction)
+    } else {
+      // Single exercises: ratio based on exercise name
+      // "Power Snatch" → ratio = 0.88
+      // "Hang Clean" → ratio = 0.95
+      if (nameLower.includes('power snatch')) ratio = 0.88;
+      else if (nameLower.includes('power clean')) ratio = 0.90;
+      else if (nameLower.includes('overhead squat')) ratio = 0.85;
+      else if (nameLower.includes('hang power snatch')) ratio = 0.80;
+      else if (nameLower.includes('hang snatch') && !nameLower.includes('power')) ratio = 0.95;
+      else if (nameLower.includes('hang clean') && !nameLower.includes('power')) ratio = 0.95;
+    }
     
     const adj = (profile.liftAdjustments && Number(profile.liftAdjustments[liftKey])) ? Number(profile.liftAdjustments[liftKey]) : 0;
     const capped = clamp(adj, -0.05, 0.05);
@@ -3052,17 +3072,66 @@ function renderHistory() {
     // Load block as current
     card.querySelector('[data-action="load"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      console.log('📋 Load Block: Button clicked, block ID:', block.id);
+      
       if (confirm(`Load this block as your current training block?\n\nThis will replace your current block.`)) {
-        state.currentBlock = JSON.parse(JSON.stringify(block));
+        console.log('📋 Load Block: User confirmed, transforming structure...');
         
-        // Reset to the appropriate week based on block's currentWeek or start from beginning
+        // v7.38 CRITICAL FIX: Transform history structure to current block structure
+        // blockHistory stores 'day.exercises' but currentBlock needs 'day.work'
+        // Same transformation as Redo button, but preserves completion status
+        const loadedBlock = {
+          seed: block.blockSeed || Date.now(),
+          profileName: block.profileName,
+          startDateISO: block.startDateISO || todayISO(),
+          programType: block.programType,
+          blockLength: block.blockLength,
+          weeks: block.weeks.map(week => ({
+            weekIndex: week.weekIndex,
+            phase: week.phase,
+            intensity: week.intensity || 0.75,
+            volFactor: week.volFactor || 0.8,
+            days: week.days.map(day => ({
+              title: day.title,
+              dow: day.dow,
+              kind: day.kind || (day.title.includes('Accessory') || day.title.includes('Hypertrophy') ? 'accessory' : 'snatch'),
+              liftKey: day.liftKey || '',
+              completed: day.completed || false,
+              completedDate: day.completedDate || null,
+              work: (day.exercises || day.work || []).map(ex => ({
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                pct: ex.prescribedPct ? ex.prescribedPct / 100 : (ex.pct || 0),
+                liftKey: ex.liftKey || '',
+                tag: ex.tag || 'work',
+                targetRIR: ex.targetRIR || null,
+                recommendedPct: ex.recommendedPct || 0,
+                description: ex.description || ''
+              }))
+            }))
+          }))
+        };
+        
+        console.log('📋 Load Block: Transformed block:', loadedBlock);
+        console.log('📋 Load Block: Weeks:', loadedBlock.weeks.length);
+        console.log('📋 Load Block: First week days:', loadedBlock.weeks[0]?.days.length);
+        console.log('📋 Load Block: First day work:', loadedBlock.weeks[0]?.days[0]?.work.length);
+        
+        state.currentBlock = loadedBlock;
         ui.weekIndex = block.currentWeek || 0;
         
+        console.log('📋 Load Block: Saving state...');
         saveState();
+        
+        console.log('📋 Load Block: Rendering...');
         renderDashboard();
         renderWorkout();
+        
         notify('✅ Block loaded! Check Workout tab to continue.');
         showPage('Workout');
+        
+        console.log('📋 Load Block: Complete!');
       }
     });
     
@@ -3245,75 +3314,150 @@ function exportBlock(block) {
 // v7.35: Import training block from CSV
 function importBlock(csvText) {
   try {
-    const lines = csvText.trim().split('\n');
+    console.log('🔍 importBlock: Starting parse...');
+    const lines = csvText.trim().split('\n').filter(l => l.trim());
+    console.log('🔍 importBlock: Found', lines.length, 'lines');
+    
     if (lines.length < 2) {
-      return { success: false, error: 'CSV file is empty' };
+      return { success: false, error: 'CSV file is empty or has only a header row' };
     }
     
     // Parse header
     const header = lines[0].toLowerCase();
+    console.log('🔍 importBlock: Header:', header);
+    
     if (!header.includes('week') || !header.includes('exercise')) {
-      return { success: false, error: 'Invalid CSV format. Must have Week and Exercise columns.' };
+      return { 
+        success: false, 
+        error: 'Invalid CSV format. Must have "Week" and "Exercise" columns.\n\nExpected format:\nWeek,Day,Exercise,Sets,Reps,Percentage,Notes\n\nActual header:\n' + lines[0]
+      };
     }
     
-    // Parse data
+    // Parse data with more flexible regex
     const weeks = {};
+    let parsedLines = 0;
+    let skippedLines = 0;
+    
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       
-      const match = line.match(/^(\d+),"([^"]+)","([^"]+)",(\d+),(\d+),(\d*),?"?([^"]*)"?$/);
-      if (!match) continue;
+      // More flexible regex that handles quotes and missing fields
+      // Format: Week,"Day","Exercise",Sets,Reps,Percentage,"Notes"
+      const match = line.match(/^(\d+),?"?([^",]+)"?,?"?([^",]+)"?,?(\d+),?(\d+),?(\d*),?"?([^"]*)"?$/);
+      
+      if (!match) {
+        console.warn('🔍 importBlock: Skipped line', i, ':', line);
+        skippedLines++;
+        continue;
+      }
       
       const [, weekNum, dayTitle, exercise, sets, reps, pct, notes] = match;
       const weekIdx = parseInt(weekNum) - 1;
       
+      console.log('🔍 importBlock: Parsed - Week', weekNum, 'Day', dayTitle, 'Exercise', exercise);
+      
       if (!weeks[weekIdx]) {
+        const noteParts = notes.split('|');
         weeks[weekIdx] = {
+          weekIndex: weekIdx,
           days: {},
-          phase: notes.split('|')[0] || 'accumulation',
+          phase: noteParts[0] || 'accumulation',
           intensity: 0.75,
           volFactor: 1.0
         };
       }
       
       if (!weeks[weekIdx].days[dayTitle]) {
+        // Determine kind based on day title
+        let kind = 'snatch';
+        const titleLower = dayTitle.toLowerCase();
+        if (titleLower.includes('clean') || titleLower.includes('jerk') || titleLower.includes('c&j')) {
+          kind = 'cj';
+        } else if (titleLower.includes('combined')) {
+          kind = 'combined';
+        } else if (titleLower.includes('strength')) {
+          kind = 'strength';
+        } else if (titleLower.includes('accessory') || titleLower.includes('hypertrophy')) {
+          kind = 'accessory';
+        }
+        
+        // Determine liftKey based on kind
+        let liftKey = '';
+        if (kind === 'snatch') liftKey = 'snatch';
+        else if (kind === 'cj') liftKey = 'cj';
+        else if (kind === 'combined') liftKey = 'snatch'; // Combined uses snatch as primary
+        
         weeks[weekIdx].days[dayTitle] = {
-          dow: 0, // Will be determined
+          dow: 0, // Will be assigned later
           title: dayTitle,
-          kind: dayTitle.toLowerCase().includes('snatch') ? 'snatch' :
-                dayTitle.toLowerCase().includes('jerk') || dayTitle.toLowerCase().includes('c&j') ? 'cj' :
-                dayTitle.toLowerCase().includes('accessory') ? 'accessory' : 'strength',
+          kind,
+          liftKey,
+          completed: false,
+          completedDate: null,
           work: []
         };
       }
       
+      // Determine liftKey for this exercise
+      const exLower = exercise.toLowerCase();
+      let exLiftKey = '';
+      if (exLower.includes('snatch')) exLiftKey = 'snatch';
+      else if (exLower.includes('clean') || exLower.includes('jerk')) exLiftKey = 'cj';
+      else if (exLower.includes('front squat')) exLiftKey = 'fs';
+      else if (exLower.includes('back squat') || exLower.includes('squat')) exLiftKey = 'bs';
+      else if (exLower.includes('push press')) exLiftKey = 'pushPress';
+      else if (exLower.includes('press')) exLiftKey = 'strictPress';
+      
       weeks[weekIdx].days[dayTitle].work.push({
         name: exercise,
-        sets: parseInt(sets),
-        reps: parseInt(reps),
+        sets: parseInt(sets) || 0,
+        reps: parseInt(reps) || 0,
         pct: pct ? parseFloat(pct) / 100 : 0,
-        liftKey: '',
-        tag: 'strength'
+        liftKey: exLiftKey,
+        tag: 'work'
       });
+      
+      parsedLines++;
+    }
+    
+    console.log('🔍 importBlock: Parsed', parsedLines, 'lines, skipped', skippedLines);
+    
+    if (parsedLines === 0) {
+      return { success: false, error: 'No valid exercises found in CSV. Check the format.' };
     }
     
     // Convert to array format
     const weeksArray = [];
     const maxWeek = Math.max(...Object.keys(weeks).map(Number));
+    
     for (let i = 0; i <= maxWeek; i++) {
       if (weeks[i]) {
         const daysArray = Object.values(weeks[i].days);
-        // Assign DOW based on order
+        // Assign DOW based on order (Mon=1, Wed=3, Fri=5, etc.)
+        const daysPerWeek = daysArray.length;
         daysArray.forEach((day, idx) => {
-          day.dow = idx;
+          if (daysPerWeek === 3) {
+            day.dow = [1, 3, 5][idx] || idx; // Mon, Wed, Fri
+          } else if (daysPerWeek === 4) {
+            day.dow = [1, 2, 4, 5][idx] || idx; // Mon, Tue, Thu, Fri
+          } else if (daysPerWeek === 5) {
+            day.dow = [1, 2, 3, 4, 5][idx] || idx; // Mon-Fri
+          } else if (daysPerWeek === 6) {
+            day.dow = [1, 2, 3, 4, 5, 6][idx] || idx; // Mon-Sat
+          } else {
+            day.dow = idx + 1; // Fallback
+          }
         });
+        
         weeksArray.push({
           ...weeks[i],
           days: daysArray
         });
       }
     }
+    
+    console.log('🔍 importBlock: Created', weeksArray.length, 'weeks');
     
     const block = {
       id: 'imported_' + Date.now(),
@@ -3324,10 +3468,12 @@ function importBlock(csvText) {
       currentWeek: 0
     };
     
+    console.log('🔍 importBlock: Success!', block);
     return { success: true, block };
     
   } catch (err) {
-    return { success: false, error: err.message };
+    console.error('🔍 importBlock: Exception:', err);
+    return { success: false, error: err.message + '\n\nStack: ' + err.stack };
   }
 }
 
@@ -3640,27 +3786,47 @@ function wireButtons() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    console.log('📥 Import Block: File selected', file.name, file.type, file.size);
+    
     const reader = new FileReader();
+    reader.onerror = (error) => {
+      console.error('📥 Import Block: FileReader error', error);
+      alert(`❌ Failed to read file: ${error}`);
+    };
+    
     reader.onload = (event) => {
       try {
         const csvText = event.target.result;
+        console.log('📥 Import Block: File read successfully, length:', csvText.length);
+        console.log('📥 Import Block: First 200 chars:', csvText.substring(0, 200));
+        
         const result = importBlock(csvText);
+        console.log('📥 Import Block: Import result:', result);
         
         if (result.success) {
-          if (confirm(`Import training block with ${result.block.weeks.length} weeks?\n\nThis will REPLACE your current block.`)) {
+          const weeksCount = result.block.weeks.length;
+          const daysCount = result.block.weeks.reduce((sum, w) => sum + w.days.length, 0);
+          const exercisesCount = result.block.weeks.reduce((sum, w) => 
+            sum + w.days.reduce((s, d) => s + (d.work?.length || 0), 0), 0);
+          
+          if (confirm(`Import training block?\n\n• ${weeksCount} weeks\n• ${daysCount} training days\n• ${exercisesCount} exercises\n\nThis will REPLACE your current block.`)) {
             state.currentBlock = result.block;
             ui.weekIndex = 0;
             saveState();
             renderDashboard();
             renderWorkout();
             notify('✅ Training block imported successfully!');
+            showPage('Workout');
           }
         } else {
-          alert(`❌ Import failed: ${result.error}`);
+          console.error('📥 Import Block: Import failed:', result.error);
+          alert(`❌ Import failed: ${result.error}\n\nMake sure you're importing a Training Block CSV (not workout history).\n\nExpected format:\nWeek,Day,Exercise,Sets,Reps,Percentage,Notes`);
         }
       } catch (err) {
-        alert(`❌ Import failed: ${err.message}`);
+        console.error('📥 Import Block: Exception:', err);
+        alert(`❌ Import failed: ${err.message}\n\nCheck the browser console (F12) for details.`);
       }
+      // Reset file input
       e.target.value = '';
     };
     reader.readAsText(file);
@@ -3839,11 +4005,22 @@ function importCSV(csvText) {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    console.log('📥 Import CSV History: File selected', file.name, file.type, file.size);
+    
     const reader = new FileReader();
+    reader.onerror = (error) => {
+      console.error('📥 Import CSV History: FileReader error', error);
+      alert(`❌ Failed to read file: ${error}`);
+    };
+    
     reader.onload = (event) => {
       try {
         const csvText = event.target.result;
+        console.log('📥 Import CSV History: File read successfully, length:', csvText.length);
+        console.log('📥 Import CSV History: First 200 chars:', csvText.substring(0, 200));
+        
         const result = importCSV(csvText);
+        console.log('📥 Import CSV History: Import result:', result);
         
         if (result.success) {
           alert(`✅ Import successful!\n\n${result.workouts} workouts imported\n${result.exercises} exercises logged\n\nNote: Check your maxes in Setup - they may have been updated based on imported data.`);
@@ -3851,10 +4028,12 @@ function importCSV(csvText) {
           renderHistory();
           renderDashboard();
         } else {
-          alert(`❌ Import failed: ${result.error}`);
+          console.error('📥 Import CSV History: Import failed:', result.error);
+          alert(`❌ Import failed: ${result.error}\n\nMake sure you're importing Workout History CSV (not a training block).\n\nExpected format:\nDate,Exercise,Sets,Reps,Weight,RPE`);
         }
       } catch (err) {
-        alert(`❌ Import failed: ${err.message}`);
+        console.error('📥 Import CSV History: Exception:', err);
+        alert(`❌ Import failed: ${err.message}\n\nCheck the browser console (F12) for details.`);
       }
       // Reset file input
       e.target.value = '';
