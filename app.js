@@ -3117,19 +3117,31 @@ function renderHistory() {
         console.log('📋 Load Block: Weeks:', loadedBlock.weeks.length);
         console.log('📋 Load Block: First week days:', loadedBlock.weeks[0]?.days.length);
         console.log('📋 Load Block: First day work:', loadedBlock.weeks[0]?.days[0]?.work.length);
+        console.log('📋 Load Block: Program Type:', loadedBlock.programType);
         
+        // v7.40 FIX: Set state FIRST, then save, then render
         state.currentBlock = loadedBlock;
         ui.weekIndex = block.currentWeek || 0;
+        
+        console.log('📋 Load Block: State updated, currentBlock.programType:', state.currentBlock.programType);
         
         console.log('📋 Load Block: Saving state...');
         saveState();
         
-        console.log('📋 Load Block: Rendering...');
+        console.log('📋 Load Block: Initial render...');
         renderDashboard();
         renderWorkout();
         
         notify('✅ Block loaded! Check Workout tab to continue.');
         showPage('Workout');
+        
+        // v7.40 FIX: Force re-render after page switch to ensure fresh data
+        console.log('📋 Load Block: Forcing final re-render...');
+        setTimeout(() => {
+          renderWorkout();
+          console.log('📋 Load Block: Final render complete!');
+          console.log('📋 Load Block: Verify currentBlock.programType:', state.currentBlock?.programType);
+        }, 100);
         
         console.log('📋 Load Block: Complete!');
       }
@@ -3285,19 +3297,60 @@ function showBlockDetails(block) {
 }
 
 function exportBlock(block) {
-  // v7.35: Export block as CSV for backup/restore
+  // v7.40: Export block as CSV for backup/restore
+  // v7.40 FIX: Added validation and support for both 'work' and 'exercises' fields
+  
+  if (!block) {
+    alert('⚠️ No training block to export. Generate a block first.');
+    console.error('Export failed: block is null or undefined');
+    return;
+  }
+  
+  if (!block.weeks || block.weeks.length === 0) {
+    alert('⚠️ Training block has no weeks. Cannot export empty block.');
+    console.error('Export failed: block.weeks is empty', block);
+    return;
+  }
+  
+  console.log('📤 Export: Starting export for block with', block.weeks.length, 'weeks');
+  
   let csv = 'Week,Day,Exercise,Sets,Reps,Percentage,Notes\n';
+  let rowCount = 0;
   
   block.weeks.forEach((week, weekIdx) => {
-    week.days.forEach((day) => {
-      // Use correct field name: day.work not day.exercises
-      (day.work || []).forEach((ex) => {
-        const pct = ex.pct ? Math.round(ex.pct * 100) : '';
+    if (!week.days || week.days.length === 0) {
+      console.warn(`📤 Export: Week ${weekIdx + 1} has no days, skipping`);
+      return;
+    }
+    
+    week.days.forEach((day, dayIdx) => {
+      // v7.40 FIX: Handle BOTH 'work' and 'exercises' fields
+      // Different parts of the app use different field names
+      const exercises = day.work || day.exercises || [];
+      
+      if (exercises.length === 0) {
+        console.warn(`📤 Export: Week ${weekIdx + 1}, Day ${dayIdx + 1} (${day.title}) has no exercises`);
+      }
+      
+      exercises.forEach((ex) => {
+        // Handle both percentage formats
+        const pct = ex.pct ? Math.round(ex.pct * 100) : 
+                    ex.prescribedPct ? ex.prescribedPct : '';
         const notes = `${week.phase || 'accumulation'}|${day.title || 'workout'}`;
         csv += `${weekIdx + 1},"${day.title || 'workout'}","${ex.name}",${ex.sets},${ex.reps},${pct},"${notes}"\n`;
+        rowCount++;
       });
     });
   });
+  
+  if (rowCount === 0) {
+    alert('⚠️ No exercises found in training block.\n\nThe block structure may be corrupted. Try regenerating your block.');
+    console.error('Export failed: No exercises found in block');
+    console.error('Block structure:', JSON.stringify(block, null, 2));
+    return;
+  }
+  
+  console.log(`📤 Export: Successfully exported ${rowCount} exercises from ${block.weeks.length} weeks`);
   
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
