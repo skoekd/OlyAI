@@ -1027,45 +1027,175 @@ function makeHypExercise(poolName, profile, weekIndex, slotKey, sets, reps, base
 
 
 function microIntensityFor(profile, phase, weekIndex) {
-  const w = weekIndex % 4;
-  const mode = (profile.athleteMode || 'recreational');
+  // v7.43 CRITICAL FIX #2: Block length-adaptive intensity curve
+  const blockLength = Number(profile.blockLength) || 8;
+  const progressRatio = blockLength > 1 ? weekIndex / (blockLength - 1) : 0; // 0.0 to 1.0
+  
+  // v7.43 CRITICAL FIX #3: Training age safety ceiling
+  const trainingAge = Number(profile.trainingAge) || 1;
+  let intensityCap = 1.00; // Default: no cap
+  
+  if (trainingAge < 1) {
+    intensityCap = 0.75; // <1 year: Max 75% (technique focus)
+  } else if (trainingAge < 2) {
+    intensityCap = 0.85; // 1-2 years: Max 85% (skill consolidation)
+  } else if (trainingAge < 3) {
+    intensityCap = 0.90; // 2-3 years: Max 90% (strength building)
+  }
+  // 3+ years: No cap (full intensity range available)
+  
   const pt = (profile.programType || 'general');
+  let intensity = 0.70; // base
   
-  // Base intensities
-  let acc = [0.70, 0.74];
-  let intens = 0.85;
-  let del = 0.62;
-  if (mode === 'competition' || pt === 'competition') {
-    acc = [0.73, 0.77];
-    intens = 0.88;
-    del = 0.65;
+  // v7.43 FIX: Program-specific intensity curves adapted to block length
+  if (pt === 'competition') {
+    // Competition Prep: 70% → 95% over entire block length
+    const startIntensity = 0.70;
+    const peakIntensity = 0.95;
+    const range = peakIntensity - startIntensity;
+    // Exponential curve: slower start, faster finish (power of 0.8)
+    intensity = startIntensity + (range * Math.pow(progressRatio, 0.8));
   }
-  if (pt === 'powerbuilding') {
-    acc = [0.70, 0.75];
-    intens = 0.83;
-    del = 0.62;
+  else if (pt === 'maximum_strength') {
+    // Max Strength: 80% → 95% over block length
+    intensity = 0.80 + (0.15 * progressRatio);
   }
-  if (pt === 'hypertrophy') {
-    acc = [0.68, 0.72];
-    intens = 0.80;
-    del = 0.60;
+  else if (pt === 'powerbuilding') {
+    // Powerbuilding: 70% → 83% (moderate intensity)
+    intensity = 0.70 + (0.13 * progressRatio);
+  }
+  else if (pt === 'hypertrophy') {
+    // Hypertrophy: 68% → 80% (volume-focused)
+    intensity = 0.68 + (0.12 * progressRatio);
+  }
+  else {
+    // General: Phase-based with block adaptation
+    if (phase === 'accumulation') {
+      intensity = 0.70 + (0.10 * progressRatio); // 70% → 80%
+    } else if (phase === 'intensification') {
+      intensity = 0.78 + (0.10 * progressRatio); // 78% → 88%
+    } else {
+      intensity = 0.60; // deload
+    }
   }
   
-  // MESOCYCLE PROGRESSION: Wave-based intensity bumps
-  const waveNumber = Math.floor(weekIndex / 4); // Wave 0, 1, 2...
-  const intensityBump = waveNumber * 0.02; // +2% per wave
+  // v7.43 CRITICAL: Apply training age cap
+  intensity = Math.min(intensity, intensityCap);
   
-  let baseIntensity = 0;
-  if (phase === 'accumulation') baseIntensity = (w === 0 ? acc[0] : acc[1]);
-  else if (phase === 'intensification') baseIntensity = intens;
-  else baseIntensity = del;
+  // Additional cap at 95% for safety
+  intensity = Math.min(intensity, 0.95);
   
-  return Math.min(baseIntensity + intensityBump, 0.95); // Cap at 95%
+  return intensity;
 }
 
 function chooseVariation(family, profile, weekIndex, phase, slotKey, dayIndex = 0) {
   let pool = SWAP_POOLS[family] || [];
   if (pool.length === 0) return { name: slotKey, liftKey: '' };
+  
+  // v7.43 CRITICAL FIX #1: INJURY SAFETY FILTER
+  const injuries = Array.isArray(profile.injuries) ? profile.injuries : [];
+  
+  if (injuries.length > 0) {
+    const originalPoolSize = pool.length;
+    pool = pool.filter(ex => {
+      const name = (ex.name || '').toLowerCase();
+      
+      // SHOULDER INJURY: Block overhead positions under load
+      if (injuries.includes('shoulder')) {
+        if (name.includes('snatch') && !name.includes('pull') && !name.includes('power')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(shoulder - overhead catch)');
+          return false;
+        }
+        if ((name.includes('jerk') || name.includes('strict press')) && 
+            !name.includes('power jerk') && !name.includes('push jerk') && 
+            !name.includes('push press')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(shoulder - overhead press)');
+          return false;
+        }
+        if (name.includes('overhead squat') || name.includes('ohs')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(shoulder - OHS)');
+          return false;
+        }
+        if (name.includes('behind-the-neck') || name.includes('btn')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(shoulder - BTN)');
+          return false;
+        }
+      }
+      
+      // WRIST INJURY: Block front rack positions
+      if (injuries.includes('wrist')) {
+        if ((name.includes('front squat') || (name.includes('clean') && !name.includes('pull'))) &&
+            !name.includes('power')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(wrist - front rack)');
+          return false;
+        }
+      }
+      
+      // ELBOW INJURY: Block heavy pressing
+      if (injuries.includes('elbow')) {
+        if (name.includes('press') && !name.includes('leg press')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(elbow - pressing)');
+          return false;
+        }
+        if (name.includes('jerk')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(elbow - jerk lockout)');
+          return false;
+        }
+      }
+      
+      // KNEE INJURY: Block full depth movements
+      if (injuries.includes('knee')) {
+        if ((name.includes('squat') || name.includes('snatch') || name.includes('clean')) &&
+            !name.includes('power') && !name.includes('pause') && !name.includes('tempo')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(knee - full depth)');
+          return false;
+        }
+      }
+      
+      // BACK INJURY: Block heavy axial loading
+      if (injuries.includes('back')) {
+        if (name.includes('back squat') || name.includes('deadlift') || name.includes('good morning')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(back - axial load)');
+          return false;
+        }
+        if (name.includes('pull') && !name.includes('high pull')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(back - heavy pull)');
+          return false;
+        }
+      }
+      
+      // HIP INJURY: Block heavy squatting
+      if (injuries.includes('hip')) {
+        if (name.includes('squat') && !name.includes('tempo')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(hip - squatting)');
+          return false;
+        }
+      }
+      
+      // ANKLE INJURY: Block split positions
+      if (injuries.includes('ankle')) {
+        if (name.includes('jerk') && !name.includes('power jerk') && !name.includes('push jerk')) {
+          console.warn('🚫 INJURY FILTER: Blocked', ex.name, '(ankle - split stance)');
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Emergency fallback if ALL exercises filtered
+    if (pool.length === 0) {
+      console.error('⚠️ ALL EXERCISES FILTERED for', family, '! Using emergency fallback');
+      if (family === 'snatch') pool = [{ name: 'Power Snatch', liftKey: 'snatch' }];
+      else if (family === 'cj') pool = [{ name: 'Power Clean + Push Jerk', liftKey: 'cj' }];
+      else if (family === 'bs' || family === 'fs') pool = [{ name: 'Tempo Front Squat', liftKey: 'fs' }];
+      else pool = SWAP_POOLS[family];
+    }
+    
+    if (pool.length < originalPoolSize && weekIndex === 0 && dayIndex === 0) {
+      console.log(`✅ Injury filter: ${originalPoolSize} → ${pool.length} safe exercises for ${family}`);
+    }
+  }
   
   // Filter out block variations if user has includeBlocks set to false
   const allowBlocks = (profile.includeBlocks === true || profile.includeBlocks === undefined);
@@ -1074,31 +1204,13 @@ function chooseVariation(family, profile, weekIndex, phase, slotKey, dayIndex = 
       const name = (ex.name || '').toLowerCase();
       return !name.includes('block') && !name.includes('from blocks');
     });
-    // If all exercises were filtered out, use original pool
     if (pool.length === 0) pool = SWAP_POOLS[family];
   }
   
   const pt = (profile.programType || 'general');
   const mode = (profile.athleteMode || 'recreational');
   const preferSpecific = (mode === 'competition' || pt === 'competition');
-  
-  // CRITICAL FIX: Use profile.lastBlockSeed (the NEW seed being generated)
-  // NOT blockSeed() which returns the OLD currentBlock.seed during generation
   const seed = Number(profile.lastBlockSeed || 0) || blockSeed() || 0;
-  
-  // DEBUG LOGGING
-  if (family === 'snatch' && weekIndex === 0 && dayIndex === 0) {
-    console.log('🔍 EXERCISE SELECTION DEBUG:');
-    console.log('  family:', family);
-    console.log('  slotKey:', slotKey);
-    console.log('  seed:', seed);
-    console.log('  profile.lastBlockSeed:', profile.lastBlockSeed);
-    console.log('  blockSeed() [old block]:', blockSeed());
-    console.log('  dayIndex:', dayIndex);
-    console.log('  weekIndex:', weekIndex);
-  }
-  
-  // CRITICAL FIX: Include dayIndex to ensure different exercises on different days
   const key = `${seed}|${family}|${slotKey}|${phase}|${pt}|${mode}|d${dayIndex}`;
   
   if (preferSpecific && (phase === 'intensification')) {
@@ -1107,14 +1219,6 @@ function chooseVariation(family, profile, weekIndex, phase, slotKey, dayIndex = 
   }
   
   const selected = pickFromPool(pool, key, weekIndex) || pool[0];
-  
-  // DEBUG LOGGING
-  if (family === 'snatch' && weekIndex === 0 && dayIndex === 0) {
-    console.log('  key:', key);
-    console.log('  selected:', selected.name);
-    console.log('  pool size:', pool.length);
-  }
-  
   return selected;
 }
 
@@ -1160,17 +1264,27 @@ function makeWeekPlan(profile, weekIndex) {
   
   // v7.31: Balanced template selection for ALL day counts
   // Returns template index that ensures balanced snatch/C&J volume
-  const getBalancedTemplateIndex = (dayCount, dayIndex) => {
-    // v7.36: Updated ALL patterns for better volume balance
+  // v7.43 CRITICAL FIX #4: Rolling symmetry for 1-2 day frequencies
+  const getBalancedTemplateIndex = (dayCount, dayIndex, weekIndex) => {
     const patterns = {
+      1: [0, 1, 3],        // Single day: ROTATE across weeks
+      2: [0, 1, 3, 0, 1, 3], // 2 days: Full pattern over 3 weeks
       3: [0, 1, 3],        // Sn, CJ, Combined - 2:1 ratio ✅
       4: [0, 1, 0, 1],     // Sn, CJ, Sn, CJ - 2:1 with C&J 5 sets ✅
       5: [0, 1, 3, 0, 1],  // Sn, CJ, Combined, Sn, CJ - consistent 2:1 ✅
       6: [0, 1, 3, 0, 1, 3] // Sn, CJ, Combined, Sn, CJ, Combined - 2:1 ✅
     };
     
-    // For 7+ days, repeat the 6-day pattern
     const pattern = patterns[dayCount] || patterns[6];
+    
+    // v7.43 FIX: For 1-2 day frequencies, rotate template based on WEEK
+    if (dayCount <= 2) {
+      const templateOffset = (weekIndex * dayCount) % pattern.length;
+      const effectiveIndex = (dayIndex + templateOffset) % pattern.length;
+      return pattern[effectiveIndex];
+    }
+    
+    // For 3+ days, use normal day-based rotation
     return pattern[dayIndex % pattern.length];
   };
   
@@ -1211,12 +1325,54 @@ function makeWeekPlan(profile, weekIndex) {
   };
   
   // Build accessory template with no duplicates per day
+  // v7.43 CRITICAL FIX #6: Program-specific exercise descriptions
   const generateAccessoryTemplate = (dayIndex) => {
     const acc1 = chooseVariation('accessory', profile, weekIndex, phase, 'accessory_1', dayIndex);
     const acc2 = chooseVariationExcluding('accessory', profile, weekIndex, phase, 'accessory_2', [acc1.name], dayIndex);
+    
+    const programType = profile.programType || 'general';
+    
+    const enhanceDescription = (exercise) => {
+      let desc = exercise.description || '';
+      
+      if (programType === 'hypertrophy' || programType === 'powerbuilding') {
+        desc += ' | Tempo: 3-1-1-0 (slow eccentric)';
+        desc += ' | RIR: 1-2 (near failure)';
+        desc += ' | Focus: Muscle tension';
+      }
+      else if (programType === 'competition') {
+        desc += ' | Tempo: Explosive';
+        desc += ' | RIR: 3-4 (technical reserve)';
+        desc += ' | Focus: Speed & quality';
+      }
+      else if (programType === 'maximum_strength') {
+        desc += ' | Tempo: Controlled';
+        desc += ' | RIR: 2-3';
+        desc += ' | Focus: Stability';
+      }
+      
+      return desc;
+    };
+    
     return { title: 'Accessory + Core', kind: 'accessory', main: 'Accessory', liftKey: '', work: [
-      { name: acc1.name, liftKey: acc1.liftKey, recommendedPct: acc1.recommendedPct || 0, description: acc1.description || '', sets: Math.round(3 * volFactor), reps: 5, pct: 0 },
-      { name: acc2.name, liftKey: acc2.liftKey, recommendedPct: acc2.recommendedPct || 0, description: acc2.description || '', sets: Math.round(3 * volFactor), reps: 8, pct: 0 },
+      { 
+        name: acc1.name, 
+        liftKey: acc1.liftKey, 
+        recommendedPct: acc1.recommendedPct || 0, 
+        description: enhanceDescription(acc1), 
+        sets: Math.round(3 * volFactor), 
+        reps: programType === 'hypertrophy' ? 10 : 5, 
+        pct: 0 
+      },
+      { 
+        name: acc2.name, 
+        liftKey: acc2.liftKey, 
+        recommendedPct: acc2.recommendedPct || 0, 
+        description: enhanceDescription(acc2), 
+        sets: Math.round(3 * volFactor), 
+        reps: programType === 'hypertrophy' ? 12 : 8, 
+        pct: 0 
+      },
       { name: 'Core + Mobility', sets: 1, reps: 1, pct: 0 }
     ]};
   };
@@ -1225,7 +1381,7 @@ function makeWeekPlan(profile, weekIndex) {
   const dayCount = mainDays.length;
   mainDays.map(Number).sort((a, b) => a - b).forEach((d, i) => {
     // v7.31: Use balanced template selection instead of simple index
-    const balancedTemplateIndex = getBalancedTemplateIndex(dayCount, i);
+    const balancedTemplateIndex = getBalancedTemplateIndex(dayCount, i, weekIndex);
     const t = generateMainTemplate(balancedTemplateIndex, i);
     sessions.push({ ...t, dow: d });
   });
@@ -1364,6 +1520,33 @@ function makeWeekPlan(profile, weekIndex) {
     }
     
     // GENERAL/COMPETITION/TECHNIQUE: Keep standard templates (already optimal)
+  });
+  
+  // v7.43 CRITICAL FIX #5: DURATION-AWARE TEMPLATE ENFORCEMENT
+  sessions.forEach((s, si) => {
+    if (duration === 60) {
+      // "Short" (60 min) - Maximum 3 exercises per session
+      if (s.kind === 'accessory') {
+        s.work = []; // Remove ALL accessories (no time)
+        console.log('⏱ Duration: 60min → Removed accessory day');
+        return;
+      }
+      
+      // Main days: Enforce 3-exercise limit
+      if (s.work.length > 3) {
+        console.log(`⏱ Duration: 60min → Truncated ${s.title} from ${s.work.length} to 3 exercises`);
+        s.work = s.work.slice(0, 3);
+      }
+      
+      // Additional safety: Cap sets at 5 per exercise
+      s.work.forEach(ex => {
+        if (ex.sets > 5) {
+          console.log(`⏱ Duration: 60min → Reduced ${ex.name} sets from ${ex.sets} to 5`);
+          ex.sets = 5;
+        }
+      });
+    }
+    // 75min and 90min: No enforcement needed (already handled by program logic)
   });
     
   const days = sessions.map(s => {
@@ -1823,7 +2006,7 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
     
     head.innerHTML = `
       <div style="flex:1">
-        <div class="card-title"><span class="collapse-icon" style="margin-right:8px; user-select:none;">▶</span>${ex.name}</div>
+        <div class="card-title"><span class="collapse-icon" style="margin-right:8px; user-select:none;">▼</span>${ex.name}</div>
         <div class="card-subtitle">${workSets}×${ex.reps}${ex.pct && liftKey ? ` • ${Math.round(ex.pct*100)}%` : ''}${ex.targetRIR ? ` • RIR ${ex.targetRIR}` : ''}</div>
         ${recommendationText}
         <div data-rest-timer="ex${exIndex}" style="display:none; margin-top:10px; padding:12px 16px; background:rgba(59,130,246,0.15); border:2px solid rgba(59,130,246,0.5); border-radius:10px; font-size:20px; font-weight:700; text-align:center; letter-spacing:1px;"></div>
@@ -1848,7 +2031,120 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
         if (ei === exIndex && si >= nextScheme.length) delete dayLog[k];
       });
       persist();
-      openWorkoutDetail(weekIndex, dayIndex, dayPlan);
+      
+      // v7.42 CRITICAL FIX: Don't re-render entire modal - just update this card
+      // This prevents dropdown from closing when user clicks +/- Set
+      
+      // Update the subtitle with new set count
+      const subtitle = card.querySelector('.card-subtitle');
+      if (subtitle) {
+        subtitle.textContent = `${next}×${ex.reps}${ex.pct && liftKey ? ` • ${Math.round(ex.pct*100)}%` : ''}${ex.targetRIR ? ` • RIR ${ex.targetRIR}` : ''}`;
+      }
+      
+      // Rebuild ONLY the table body with new set count
+      tbody.innerHTML = '';
+      nextScheme.forEach((s, setIndex) => {
+        const recKey = `${exIndex}:${setIndex}`;
+        const rec = dayLog[recKey] || {};
+        const cumAdj = computeCumulativeAdj(dayLog, exIndex, setIndex, nextScheme);
+        const adjWeight = s.targetWeight ? roundTo(s.targetWeight * (1 + cumAdj), p.units === 'kg' ? 1 : 1) : 0;
+        const weightVal = (rec.weight != null && rec.weight !== '') ? rec.weight : (adjWeight || '');
+        const repsVal = (rec.reps != null && rec.reps !== '') ? rec.reps : (s.targetReps || '');
+        const rpeVal = (rec.rpe != null && rec.rpe !== '') ? rec.rpe : '';
+        const actionVal = rec.action || '';
+        const row = document.createElement('tr');
+        row.dataset.idx = String(setIndex);
+        row.innerHTML = `
+          <td style="padding:8px 6px; opacity:.9">${setIndex + 1}${s.tag === 'warmup' ? '<span style="opacity:.6">w</span>' : ''}</td>
+          <td style="padding:6px"><div style="display:flex; gap:8px; align-items:center;">
+            <input inputmode="decimal" class="input small" data-role="weight" placeholder="—" value="${weightVal}" />
+            <span style="opacity:.65; font-size:12px">${s.targetPct ? `${Math.round(s.targetPct*100)}%` : (s.tag || '')}</span>
+          </div></td>
+          <td style="padding:6px"><input inputmode="numeric" class="input small" data-role="reps" placeholder="—" value="${repsVal}" /></td>
+          <td style="padding:6px"><input inputmode="decimal" class="input small" data-role="rpe" placeholder="—" value="${rpeVal}" /></td>
+          <td style="padding:6px"><select class="input small" data-role="action">
+            <option value="">—</option><option value="make">✓</option><option value="belt">↑</option>
+            <option value="heavy">⚠︎</option><option value="miss">✕</option>
+          </select></td>
+        `;
+        
+        const wEl = row.querySelector('[data-role="weight"]');
+        const repsEl = row.querySelector('[data-role="reps"]');
+        const rpeEl = row.querySelector('[data-role="rpe"]');
+        const aEl = row.querySelector('[data-role="action"]');
+        
+        if (aEl) aEl.value = actionVal;
+        
+        // Re-attach all event listeners for this row
+        if (wEl) {
+          wEl.addEventListener('change', () => {
+            updateRec(setIndex, { weight: wEl.value, status: 'done' });
+            const entered = Number(wEl.value);
+            if (Number.isFinite(entered) && entered > 0 && nextScheme[setIndex]?.tag === 'work') {
+              for (let j = setIndex + 1; j < nextScheme.length; j++) {
+                if (nextScheme[j]?.tag !== 'work') continue;
+                const nextKey = `${exIndex}:${j}`;
+                const nextRec = dayLog[nextKey] || {};
+                if (nextRec.weight != null && nextRec.weight !== '') continue;
+                const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
+                if (nextRow) {
+                  const nextWEl = nextRow.querySelector('[data-role="weight"]');
+                  if (nextWEl && !nextWEl.value) {
+                    nextWEl.value = String(entered);
+                    updateRec(j, { weight: entered });
+                  }
+                }
+              }
+            }
+            const firstWorkIdx = nextScheme.findIndex(x => x.tag === 'work');
+            if (nextScheme[setIndex]?.tag === 'work' && firstWorkIdx === setIndex) {
+              const prescribed = Number(adjWeight || s.targetWeight || 0);
+              if (Number.isFinite(entered) && entered > 0 && Number.isFinite(prescribed) && prescribed > 0) {
+                const off = clamp((entered / prescribed) - 1, -0.10, 0.10);
+                setWeightOffsetOverride(dayLog, exIndex, off);
+              }
+              if (ex.recommendedPct && ex.recommendedPct > 0 && !ex.pct && entered > 0 && nextScheme[setIndex]?.tag === 'work') {
+                if (!p.accessoryWeights) p.accessoryWeights = {};
+                p.accessoryWeights[ex.name] = entered;
+                saveState();
+              }
+            }
+          });
+        }
+        if (repsEl) {
+          repsEl.addEventListener('input', () => updateRec(setIndex, { reps: repsEl.value, status: 'done' }));
+        }
+        if (rpeEl) {
+          rpeEl.addEventListener('input', () => updateRec(setIndex, { rpe: rpeEl.value, status: 'done' }));
+        }
+        if (aEl) {
+          aEl.addEventListener('change', () => {
+            const actualWeight = Number(wEl.value);
+            updateRec(setIndex, { action: aEl.value, weight: actualWeight, status: 'done' });
+            if (nextScheme[setIndex]?.tag === 'work' && actualWeight > 0) {
+              const actionAdj = actionDelta(aEl.value);
+              let baseWeight = actualWeight * (1 + actionAdj);
+              for (let j = setIndex + 1; j < nextScheme.length; j++) {
+                if (nextScheme[j]?.tag !== 'work') continue;
+                const nextW = roundTo(baseWeight, p.units === 'kg' ? 1 : 1);
+                const nextRow = tbody.querySelector(`tr[data-idx="${j}"]`);
+                if (nextRow) {
+                  const nextWEl = nextRow.querySelector('[data-role="weight"]');
+                  if (nextWEl) {
+                    nextWEl.value = String(nextW);
+                    updateRec(j, { weight: nextW });
+                  }
+                }
+                baseWeight = nextW;
+              }
+            }
+          });
+        }
+        
+        tbody.appendChild(row);
+      });
+      
+      // Dropdown remains open - no re-render!
     };
     head.querySelector('[data-role="minusSet"]')?.addEventListener('click', (e) => { 
       e.preventDefault(); 
@@ -2199,7 +2495,8 @@ function openWorkoutDetail(weekIndex, dayIndex, dayPlan) {
           const deleteBtn = modalEl.querySelector('[data-action="delete"]');
           if (deleteBtn) {
             deleteBtn.addEventListener('click', () => {
-              if (confirm(`Permanently delete "${ex.name}"?`)) {
+              // v7.42 FIX: More explicit warning about data loss
+              if (confirm(`⚠️ Permanently delete "${ex.name}"?\n\nThis will delete all logged sets, weights, and notes for this exercise.\n\nThis action cannot be undone.`)) {
                 try {
                   const wk = state.currentBlock?.weeks?.[weekIndex];
                   const dy = wk?.days?.[dayIndex];
