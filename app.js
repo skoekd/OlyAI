@@ -45,50 +45,48 @@ function notify(msg) {
   console.log(msg);
 }
 
-// v7.45 CLOUD SYNC: Supabase configuration
+// =================================================================
+// v7.45 CLOUD SYNC: Supabase Integration
+// =================================================================
+
 const SUPABASE_URL = 'https://xbqlejwtfbeebucrdvqn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhicWxland0ZmJlZWJ1Y3JkdnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwODgzODEsImV4cCI6MjA4NTY2NDM4MX0.1RdmT3twtadvxTjdepaqSYaqZRFkOAMhWyRQOjf-Zp0';
 
-// Initialize Supabase client (loaded from CDN)
 let supabase = null;
 
-// Get or create anonymous user ID
 function getAnonymousUserId() {
   let userId = localStorage.getItem('liftai_user_id');
   if (!userId) {
     userId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem('liftai_user_id', userId);
-    console.log('✅ Created new anonymous user ID:', userId);
   }
   return userId;
 }
 
-// Initialize Supabase when window loads
 function initializeSupabase() {
   try {
-    if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+    if (typeof window.supabase !== 'undefined') {
       supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('✅ Supabase client initialized');
+      console.log('✅ Supabase initialized');
       return true;
     } else {
-      console.warn('⚠️ Supabase SDK not loaded - cloud sync disabled');
+      console.warn('⚠️ Supabase not loaded - cloud sync disabled');
       return false;
     }
   } catch (error) {
-    console.error('❌ Failed to initialize Supabase:', error);
+    console.error('❌ Supabase init failed:', error);
     return false;
   }
 }
 
-// Cloud Sync: Push current block to cloud
-async function pushBlockToCloud() {
+async function pushToCloud() {
   if (!supabase) {
-    notify('⚠️ Cloud sync not available - please refresh the page');
+    notify('⚠️ Cloud sync not available');
     return false;
   }
   
-  if (!state.currentBlock || !state.currentBlock.weeks || state.currentBlock.weeks.length === 0) {
-    notify('⚠️ No training block to save - generate a block first');
+  if (!state.currentBlock || !state.currentBlock.weeks) {
+    notify('⚠️ No block to save');
     return false;
   }
   
@@ -98,90 +96,65 @@ async function pushBlockToCloud() {
     const userId = getAnonymousUserId();
     const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
     
-    // Prepare block data
     const blockData = {
       user_id: userId,
       block_name: blockName,
       block_data: state.currentBlock,
       profile_data: {
-        name: state.profile.name || '',
-        maxes: state.profile.maxes || {},
-        programType: state.profile.programType || 'general',
-        athleteMode: state.profile.athleteMode || 'recreational',
-        volumePref: state.profile.volumePref || 'reduced',
-        duration: state.profile.duration || 75,
-        blockLength: state.profile.blockLength || 8,
-        trainingAge: state.profile.trainingAge || 1,
-        injuries: state.profile.injuries || []
+        name: state.profile.name,
+        maxes: state.profile.maxes,
+        programType: state.profile.programType,
+        volumePref: state.profile.volumePref,
+        duration: state.profile.duration
       },
       block_length: state.currentBlock.weeks.length,
-      program_type: state.profile.programType || 'general',
+      program_type: state.profile.programType,
       is_active: true
     };
     
-    // Check if block already exists (by name for this user)
-    const { data: existing, error: searchError } = await supabase
+    const { data: existing } = await supabase
       .from('training_blocks')
       .select('id')
       .eq('user_id', userId)
       .eq('block_name', blockName)
       .maybeSingle();
     
-    if (searchError && searchError.code !== 'PGRST116') {
-      throw searchError;
-    }
-    
     let result;
     if (existing?.id) {
-      // Update existing block
       result = await supabase
         .from('training_blocks')
         .update(blockData)
         .eq('id', existing.id)
         .select()
         .single();
-      
-      if (result.error) throw result.error;
-      
-      notify('✅ Training block updated in cloud');
-      console.log('✅ Block updated:', result.data.id);
+      notify('✅ Block updated in cloud');
     } else {
-      // Insert new block
       result = await supabase
         .from('training_blocks')
         .insert([blockData])
         .select()
         .single();
-      
-      if (result.error) throw result.error;
-      
-      notify('✅ Training block saved to cloud');
-      console.log('✅ Block saved:', result.data.id);
+      notify('✅ Block saved to cloud');
     }
     
-    // Store cloud ID
-    if (result.data?.id) {
-      localStorage.setItem('liftai_last_cloud_block_id', result.data.id);
-    }
-    
+    if (result.error) throw result.error;
     return true;
     
   } catch (error) {
-    console.error('❌ Cloud sync error:', error);
-    notify('❌ Cloud sync failed: ' + (error.message || 'Unknown error'));
+    console.error('Cloud sync error:', error);
+    notify('❌ Cloud sync failed');
     return false;
   }
 }
 
-// Cloud Sync: Pull blocks from cloud and show selection modal
-async function pullBlocksFromCloud() {
+async function pullFromCloud() {
   if (!supabase) {
-    notify('⚠️ Cloud sync not available - please refresh the page');
+    notify('⚠️ Cloud sync not available');
     return;
   }
   
   try {
-    notify('☁️ Loading blocks from cloud...');
+    notify('☁️ Loading from cloud...');
     
     const userId = getAnonymousUserId();
     
@@ -196,107 +169,61 @@ async function pullBlocksFromCloud() {
     if (error) throw error;
     
     if (!blocks || blocks.length === 0) {
-      notify('📦 No saved blocks found in cloud');
+      notify('📦 No saved blocks found');
       return;
     }
     
-    console.log(`✅ Found ${blocks.length} blocks in cloud`);
-    
-    // Show selection modal
     showCloudBlocksModal(blocks);
     
   } catch (error) {
-    console.error('❌ Failed to load blocks:', error);
-    notify('❌ Failed to load blocks: ' + (error.message || 'Unknown error'));
+    console.error('Pull error:', error);
+    notify('❌ Failed to load blocks');
   }
 }
 
-// Show cloud blocks selection modal
 function showCloudBlocksModal(blocks) {
-  const modalContent = `
-    <div style="max-width:600px">
-      <h3 style="margin:0 0 8px 0;font-size:18px">☁️ Saved Training Blocks</h3>
-      <p style="color:var(--text-dim);margin-bottom:20px;font-size:14px">
-        ${blocks.length} block${blocks.length !== 1 ? 's' : ''} found • Click to restore
-      </p>
-      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto;padding-right:8px">
-        ${blocks.map(block => `
-          <div class="cloud-block-card" onclick="restoreBlockFromCloud('${block.id}')" style="
+  const modalHTML = `
+    <div style="max-width:600px;padding:24px">
+      <h3 style="margin:0 0 8px 0">☁️ Saved Blocks</h3>
+      <p style="color:var(--text-dim);margin-bottom:20px">${blocks.length} block${blocks.length !== 1 ? 's' : ''} found</p>
+      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto">
+        ${blocks.map(b => `
+          <div onclick="restoreBlock('${b.id}')" style="
             padding:16px;
-            background:rgba(59,130,246,0.08);
-            border:1px solid rgba(59,130,246,0.2);
-            border-radius:10px;
+            background:rgba(59,130,246,0.1);
+            border:1px solid rgba(59,130,246,0.3);
+            border-radius:8px;
             cursor:pointer;
-            transition:all 0.2s;
-          " onmouseover="this.style.background='rgba(59,130,246,0.15)';this.style.borderColor='rgba(59,130,246,0.4)'" 
-             onmouseout="this.style.background='rgba(59,130,246,0.08)';this.style.borderColor='rgba(59,130,246,0.2)'">
-            <div style="font-weight:600;font-size:15px;margin-bottom:6px">${escapeHtml(block.block_name)}</div>
-            <div style="font-size:13px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:12px">
-              <span>📅 ${block.block_length} weeks</span>
-              <span>💪 ${block.program_type}</span>
-              <span>🕐 ${formatDate(block.updated_at)}</span>
+          ">
+            <div style="font-weight:600;margin-bottom:6px">${escapeHtml(b.block_name)}</div>
+            <div style="font-size:13px;color:var(--text-dim)">
+              ${b.block_length} weeks • ${b.program_type} • ${formatDate(b.updated_at)}
             </div>
           </div>
         `).join('')}
       </div>
-      <div style="margin-top:20px;display:flex;gap:10px">
-        <button class="btn secondary" onclick="closeCloudModal()" style="flex:1">Cancel</button>
+      <div style="margin-top:20px">
+        <button class="btn secondary" onclick="closeCloudModal()">Cancel</button>
       </div>
     </div>
   `;
   
-  // Create modal
   const modal = document.createElement('div');
-  modal.id = 'cloudBlocksModal';
-  modal.innerHTML = `
-    <div style="
-      position:fixed;
-      top:0;left:0;right:0;bottom:0;
-      background:rgba(0,0,0,0.8);
-      backdrop-filter:blur(4px);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      z-index:10000;
-      padding:20px;
-      animation:fadeIn 0.2s;
-    " onclick="if(event.target===this) closeCloudModal()">
-      <div style="
-        background:var(--card);
-        border-radius:16px;
-        padding:24px;
-        max-width:95%;
-        max-height:90vh;
-        overflow-y:auto;
-        box-shadow:0 20px 60px rgba(0,0,0,0.5);
-      " onclick="event.stopPropagation()">
-        ${modalContent}
-      </div>
-    </div>
-  `;
-  
+  modal.id = 'cloudModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px';
+  modal.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:95%;max-height:90vh;overflow-y:auto">${modalHTML}</div>`;
   document.body.appendChild(modal);
 }
 
-// Close cloud blocks modal
 function closeCloudModal() {
-  const modal = document.getElementById('cloudBlocksModal');
-  if (modal) {
-    modal.remove();
-  }
+  document.getElementById('cloudModal')?.remove();
 }
 
-// Restore a specific block from cloud
-async function restoreBlockFromCloud(blockId) {
-  if (!supabase) {
-    notify('⚠️ Cloud sync not available');
-    return false;
-  }
-  
+async function restoreBlock(blockId) {
   try {
-    notify('☁️ Restoring block...');
+    notify('☁️ Restoring...');
     
-    const { data: block, error } = await supabase
+    const { data, error } = await supabase
       .from('training_blocks')
       .select('*')
       .eq('id', blockId)
@@ -304,347 +231,50 @@ async function restoreBlockFromCloud(blockId) {
     
     if (error) throw error;
     
-    if (!block) {
-      notify('❌ Block not found');
-      return false;
+    state.currentBlock = data.block_data;
+    if (data.profile_data) {
+      Object.assign(state.profile, data.profile_data);
     }
     
-    // Restore block data
-    state.currentBlock = block.block_data;
-    
-    // Restore profile data if available
-    if (block.profile_data) {
-      if (block.profile_data.name) state.profile.name = block.profile_data.name;
-      if (block.profile_data.maxes) state.profile.maxes = block.profile_data.maxes;
-      if (block.profile_data.programType) state.profile.programType = block.profile_data.programType;
-      if (block.profile_data.athleteMode) state.profile.athleteMode = block.profile_data.athleteMode;
-      if (block.profile_data.volumePref) state.profile.volumePref = block.profile_data.volumePref;
-      if (block.profile_data.duration) state.profile.duration = block.profile_data.duration;
-      if (block.profile_data.blockLength) state.profile.blockLength = block.profile_data.blockLength;
-      if (block.profile_data.trainingAge) state.profile.trainingAge = block.profile_data.trainingAge;
-      if (block.profile_data.injuries) state.profile.injuries = block.profile_data.injuries;
-    }
-    
-    // Save to localStorage
     saveState();
-    
-    // Update UI
     ui.weekIndex = 0;
     renderDashboard();
     renderWorkout();
-    renderHistory();
-    
-    // Close modal
     closeCloudModal();
     
-    // Show success
-    notify(`✅ Restored: ${block.block_name}`);
-    console.log('✅ Block restored:', block.block_name);
-    
-    return true;
+    notify('✅ Block restored');
     
   } catch (error) {
-    console.error('❌ Restore error:', error);
-    notify('❌ Failed to restore block: ' + (error.message || 'Unknown error'));
-    return false;
+    console.error('Restore error:', error);
+    notify('❌ Restore failed');
   }
 }
 
-// Helper: Format date for display
 function formatDate(dateString) {
   const date = new Date(dateString);
   const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+  const diff = now - date;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
   
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
 }
 
-// Helper: Escape HTML to prevent XSS
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
 
-// Auto-sync: Automatically push to cloud after block generation
-function scheduleAutoSync() {
-  if (!supabase || !state.currentBlock) return;
-  
-  // Auto-save after 3 seconds (debounced)
-  clearTimeout(scheduleAutoSync.timer);
-  scheduleAutoSync.timer = setTimeout(() => {
-    console.log('🔄 Auto-syncing to cloud...');
-    pushBlockToCloud();
-  }, 3000);
-}
+// =================================================================
+// END CLOUD SYNC
+// =================================================================
 
-// Initialize Supabase client (will be loaded from CDN)
-let supabaseClient = null;
-
-// Get or create anonymous user ID
-function getAnonymousUserId() {
-  let userId = localStorage.getItem('liftai_user_id');
-  if (!userId) {
-    userId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('liftai_user_id', userId);
-  }
-  return userId;
-}
-
-// Initialize Supabase when DOM is ready
-function initializeSupabase() {
-  if (typeof window.supabase !== 'undefined') {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Supabase initialized');
-  } else {
-    console.warn('⚠️ Supabase SDK not loaded - cloud sync disabled');
-  }
-}
-
-// Cloud Sync: Push current block to Supabase
-async function pushBlockToCloud() {
-  if (!supabaseClient) {
-    notify('⚠️ Cloud sync not available - Supabase not loaded');
-    return false;
-  }
-  
-  if (!state.currentBlock) {
-    notify('⚠️ No training block to sync');
-    return false;
-  }
-  
-  try {
-    const userId = getAnonymousUserId();
-    const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
-    
-    // Prepare data
-    const blockData = {
-      user_id: userId,
-      block_name: blockName,
-      block_data: state.currentBlock,
-      profile_data: {
-        maxes: state.profile.maxes,
-        preferences: {
-          programType: state.profile.programType,
-          athleteMode: state.profile.athleteMode,
-          volumePref: state.profile.volumePref,
-          duration: state.profile.duration,
-          blockLength: state.profile.blockLength,
-          trainingAge: state.profile.trainingAge,
-          injuries: state.profile.injuries
-        }
-      },
-      block_length: state.currentBlock.weeks?.length || 0,
-      program_type: state.profile.programType || 'general',
-      is_active: true
-    };
-    
-    // Check if block already exists
-    const existingBlock = await supabaseClient
-      .from('training_blocks')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('block_name', blockName)
-      .maybeSingle();
-    
-    let result;
-    if (existingBlock?.data?.id) {
-      // Update existing
-      result = await supabaseClient
-        .from('training_blocks')
-        .update(blockData)
-        .eq('id', existingBlock.data.id)
-        .select()
-        .single();
-      
-      notify('☁️ Training block updated in cloud');
-    } else {
-      // Insert new
-      result = await supabaseClient
-        .from('training_blocks')
-        .insert(blockData)
-        .select()
-        .single();
-      
-      notify('☁️ Training block saved to cloud');
-    }
-    
-    if (result.error) {
-      console.error('Supabase error:', result.error);
-      notify('❌ Cloud sync failed: ' + result.error.message);
-      return false;
-    }
-    
-    // Store the cloud ID in localStorage
-    if (result.data?.id) {
-      localStorage.setItem('liftai_cloud_block_id', result.data.id);
-    }
-    
-    console.log('✅ Block synced to cloud:', result.data);
-    return true;
-    
-  } catch (error) {
-    console.error('Cloud sync error:', error);
-    notify('❌ Cloud sync failed: ' + error.message);
-    return false;
-  }
-}
-
-// Cloud Sync: Pull blocks from Supabase
-async function pullBlocksFromCloud() {
-  if (!supabaseClient) {
-    notify('⚠️ Cloud sync not available - Supabase not loaded');
-    return [];
-  }
-  
-  try {
-    const userId = getAnonymousUserId();
-    
-    const { data, error } = await supabaseClient
-      .from('training_blocks')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('updated_at', { ascending: false });
-    
-    if (error) {
-      console.error('Supabase error:', error);
-      notify('❌ Failed to load blocks from cloud: ' + error.message);
-      return [];
-    }
-    
-    console.log(`✅ Loaded ${data?.length || 0} blocks from cloud`);
-    return data || [];
-    
-  } catch (error) {
-    console.error('Cloud sync error:', error);
-    notify('❌ Failed to load blocks from cloud: ' + error.message);
-    return [];
-  }
-}
-
-// Cloud Sync: Restore a specific block
-async function restoreBlockFromCloud(blockId) {
-  if (!supabaseClient) {
-    notify('⚠️ Cloud sync not available');
-    return false;
-  }
-  
-  try {
-    const { data, error } = await supabaseClient
-      .from('training_blocks')
-      .select('*')
-      .eq('id', blockId)
-      .single();
-    
-    if (error) {
-      console.error('Supabase error:', error);
-      notify('❌ Failed to restore block: ' + error.error);
-      return false;
-    }
-    
-    if (!data) {
-      notify('❌ Block not found');
-      return false;
-    }
-    
-    // Restore the block
-    state.currentBlock = data.block_data;
-    
-    // Restore profile if available
-    if (data.profile_data) {
-      if (data.profile_data.maxes) {
-        state.profile.maxes = data.profile_data.maxes;
-      }
-      if (data.profile_data.preferences) {
-        Object.assign(state.profile, data.profile_data.preferences);
-      }
-    }
-    
-    // Save to localStorage
-    saveState();
-    
-    // Update UI
-    ui.weekIndex = 0;
-    renderDashboard();
-    renderWorkout();
-    renderHistory();
-    
-    notify('✅ Training block restored from cloud');
-    console.log('✅ Block restored:', data.block_name);
-    
-    return true;
-    
-  } catch (error) {
-    console.error('Restore error:', error);
-    notify('❌ Failed to restore block: ' + error.message);
-    return false;
-  }
-}
-
-// Cloud Sync: Show cloud blocks modal
-async function showCloudBlocksModal() {
-  const blocks = await pullBlocksFromCloud();
-  
-  if (blocks.length === 0) {
-    notify('📦 No saved blocks found in cloud');
-    return;
-  }
-  
-  const modalHTML = `
-    <div style="padding:20px">
-      <h3 style="margin-top:0">☁️ Cloud Saved Blocks</h3>
-      <p style="color:var(--text-dim);margin-bottom:20px">
-        ${blocks.length} training block${blocks.length !== 1 ? 's' : ''} found
-      </p>
-      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto">
-        ${blocks.map(block => `
-          <div style="padding:15px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer"
-               onclick="restoreBlockFromCloud('${block.id}'); closeModal()">
-            <div style="font-weight:600;margin-bottom:5px">${block.block_name}</div>
-            <div style="font-size:13px;color:var(--text-dim)">
-              ${block.block_length} weeks • ${block.program_type}
-              <br>Last updated: ${new Date(block.updated_at).toLocaleString()}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-      <div style="margin-top:20px;display:flex;gap:10px">
-        <button class="btn secondary" onclick="closeModal()" style="flex:1">Cancel</button>
-      </div>
-    </div>
-  `;
-  
-  openModal('Cloud Saved Blocks', '', modalHTML);
-}
-
-function closeModal() {
-  const modalOverlay = document.getElementById('modalOverlay');
-  if (modalOverlay) {
-    modalOverlay.classList.remove('show');
-  }
-}
-
-// Auto-sync: Save to cloud when block changes (debounced)
-let autoSyncTimeout = null;
-function scheduleAutoSync() {
-  if (!supabaseClient) return;
-  
-  clearTimeout(autoSyncTimeout);
-  autoSyncTimeout = setTimeout(() => {
-    if (state.currentBlock) {
-      pushBlockToCloud();
-    }
-  }, 5000); // 5 second delay
-}
 
 // v7.16 STAGE 4: Rest Timer
 let restTimer = {
@@ -1448,94 +1078,17 @@ function computeWorkingMaxes(maxes) {
   };
 }
 
-// v7.44 ELITE SYSTEM #1: ADVANCED MACRO-PERIODIZATION (STEP-LOADING)
-// Implements 3-weeks-up, 1-week-down mesocycles for 8-12 week blocks
-function phaseForWeek(weekIndex, blockLength = 8) {
-  // Step-loading mesocycle: 3 weeks loading, 1 week deload
-  const mesocycleWeek = weekIndex % 4; // Position within mesocycle (0-3)
-  
-  if (mesocycleWeek === 3) {
-    // Week 4 of each mesocycle: MINI-DELOAD
-    return 'deload';
-  } else if (mesocycleWeek === 0 || mesocycleWeek === 1) {
-    // Weeks 1-2: ACCUMULATION (volume emphasis)
-    return 'accumulation';
-  } else {
-    // Week 3: INTENSIFICATION (peak week before deload)
-    return 'intensification';
-  }
-}
-
-// v7.44 ELITE: Step-loading volume progression
-function getStepLoadingMultiplier(weekIndex, phase) {
-  const mesocycleWeek = weekIndex % 4;
-  const mesocycleNumber = Math.floor(weekIndex / 4); // 0, 1, 2... (which mesocycle)
-  
-  // Base progression within mesocycle
-  let volumeMultiplier = 1.0;
-  
-  if (phase === 'deload') {
-    // Week 4: -20% volume
-    volumeMultiplier = 0.80;
-  } else if (phase === 'accumulation') {
-    // Weeks 1-2: Standard volume
-    volumeMultiplier = mesocycleWeek === 0 ? 1.0 : 1.05; // Week 2 slightly higher
-  } else if (phase === 'intensification') {
-    // Week 3: +10% volume (peak before deload)
-    volumeMultiplier = 1.10;
-  }
-  
-  // Progressive overload across mesocycles: +2.5% per cycle
-  const mesocycleBonus = mesocycleNumber * 0.025;
-  
-  return volumeMultiplier * (1 + mesocycleBonus);
-}
-
-// v7.44 ELITE: Step-loading intensity progression
-function getStepLoadingIntensity(weekIndex, phase, baseIntensity, experienceLevel) {
-  const mesocycleWeek = weekIndex % 4;
-  const mesocycleNumber = Math.floor(weekIndex / 4);
-  
-  // Intensity caps based on experience
-  const intensityCap = experienceLevel === 'advanced' ? 0.95 : 
-                       experienceLevel === 'intermediate' ? 0.92 : 0.88;
-  
-  let intensity = baseIntensity;
-  
-  if (phase === 'deload') {
-    // Week 4: -10% intensity
-    intensity = baseIntensity * 0.90;
-  } else if (phase === 'intensification') {
-    // Week 3: Peak intensity
-    intensity = baseIntensity * 1.05;
-  }
-  
-  // Progressive overload: Each mesocycle starts 2.5% higher than previous
-  intensity += (mesocycleNumber * 0.025);
-  
-  // Apply experience-based cap
-  intensity = Math.min(intensity, intensityCap);
-  
-  return intensity;
+function phaseForWeek(weekIndex) {
+  const w = weekIndex % 4;
+  if (w === 0 || w === 1) return 'accumulation';
+  if (w === 2) return 'intensification';
+  return 'deload';
 }
 
 function volumeFactorFor(profile, phase, weekIndex = 0) {
-  // v7.44 ELITE: Base volume from user preference
   const pref = profile.volumePref || 'reduced';
-  let base = 1.0;
-  
-  if (pref === 'minimal') {
-    base = 0.7; // Low volume: -1 set from accessories
-  } else if (pref === 'reduced') {
-    base = 0.85; // Standard reduced
-  } else if (pref === 'standard') {
-    base = 1.0; // Full volume
-  } else if (pref === 'high') {
-    base = 1.15; // High volume: +1 set to accessories, +1 rep to primary
-  }
-  
-  // v7.44 ELITE: Step-loading mesocycle multiplier
-  const stepLoadingMult = getStepLoadingMultiplier(weekIndex, phase);
+  const base = (pref === 'standard') ? 1.0 : (pref === 'minimal' ? 0.6 : 0.8);
+  const phaseMult = (phase === 'accumulation') ? 1.0 : (phase === 'intensification' ? 0.85 : 0.6);
   
   // Age-based volume adjustment for Masters athletes
   let ageMult = 1.0;
@@ -1546,7 +1099,12 @@ function volumeFactorFor(profile, phase, weekIndex = 0) {
     ageMult = 0.90; // Masters 40-49 = 90% volume
   }
   
-  return base * stepLoadingMult * ageMult;
+  // MESOCYCLE PROGRESSION: Wave-based volume bumps
+  const waveNumber = Math.floor(weekIndex / 4); // Wave 0, 1, 2...
+  const volumeBump = waveNumber * 0.05; // +5% per wave
+  const waveMult = Math.min(1 + volumeBump, 1.15); // Cap at +15%
+  
+  return base * phaseMult * ageMult * waveMult;
 }
 
 function transitionMultiplier(profile, weekIndex) {
@@ -1700,74 +1258,65 @@ function makeHypExercise(poolName, profile, weekIndex, slotKey, sets, reps, base
 
 
 function microIntensityFor(profile, phase, weekIndex) {
-  // v7.44 ELITE SYSTEM #1: Step-loading with experience-based intensity caps
+  // v7.43 CRITICAL FIX #2: Block length-adaptive intensity curve
   const blockLength = Number(profile.blockLength) || 8;
-  const progressRatio = blockLength > 1 ? weekIndex / (blockLength - 1) : 0;
+  const progressRatio = blockLength > 1 ? weekIndex / (blockLength - 1) : 0; // 0.0 to 1.0
   
-  // v7.43: Training age safety ceiling (preserved)
+  // v7.43 CRITICAL FIX #3: Training age safety ceiling
   const trainingAge = Number(profile.trainingAge) || 1;
-  let trainingAgeCap = 1.00;
+  let intensityCap = 1.00; // Default: no cap
   
   if (trainingAge < 1) {
-    trainingAgeCap = 0.75;
+    intensityCap = 0.75; // <1 year: Max 75% (technique focus)
   } else if (trainingAge < 2) {
-    trainingAgeCap = 0.85;
+    intensityCap = 0.85; // 1-2 years: Max 85% (skill consolidation)
   } else if (trainingAge < 3) {
-    trainingAgeCap = 0.90;
+    intensityCap = 0.90; // 2-3 years: Max 90% (strength building)
   }
-  
-  // v7.44 ELITE: Experience level caps (92% intermediate, 95% advanced)
-  const athleteMode = profile.athleteMode || 'recreational';
-  let experienceCap = 0.88; // Recreational default
-  
-  if (athleteMode === 'advanced' || athleteMode === 'elite') {
-    experienceCap = 0.95; // Advanced athletes can use full range
-  } else if (athleteMode === 'intermediate' || athleteMode === 'competition') {
-    experienceCap = 0.92; // Intermediate cap at 92%
-  }
+  // 3+ years: No cap (full intensity range available)
   
   const pt = (profile.programType || 'general');
-  let baseIntensity = 0.70;
+  let intensity = 0.70; // base
   
-  // Program-specific base intensity curves
+  // v7.43 FIX: Program-specific intensity curves adapted to block length
   if (pt === 'competition') {
+    // Competition Prep: 70% → 95% over entire block length
     const startIntensity = 0.70;
     const peakIntensity = 0.95;
     const range = peakIntensity - startIntensity;
-    baseIntensity = startIntensity + (range * Math.pow(progressRatio, 0.8));
+    // Exponential curve: slower start, faster finish (power of 0.8)
+    intensity = startIntensity + (range * Math.pow(progressRatio, 0.8));
   }
   else if (pt === 'maximum_strength') {
-    baseIntensity = 0.80 + (0.15 * progressRatio);
+    // Max Strength: 80% → 95% over block length
+    intensity = 0.80 + (0.15 * progressRatio);
   }
   else if (pt === 'powerbuilding') {
-    baseIntensity = 0.70 + (0.13 * progressRatio);
+    // Powerbuilding: 70% → 83% (moderate intensity)
+    intensity = 0.70 + (0.13 * progressRatio);
   }
   else if (pt === 'hypertrophy') {
-    baseIntensity = 0.68 + (0.12 * progressRatio);
+    // Hypertrophy: 68% → 80% (volume-focused)
+    intensity = 0.68 + (0.12 * progressRatio);
   }
   else {
-    // General
+    // General: Phase-based with block adaptation
     if (phase === 'accumulation') {
-      baseIntensity = 0.70 + (0.10 * progressRatio);
+      intensity = 0.70 + (0.10 * progressRatio); // 70% → 80%
     } else if (phase === 'intensification') {
-      baseIntensity = 0.78 + (0.10 * progressRatio);
+      intensity = 0.78 + (0.10 * progressRatio); // 78% → 88%
     } else {
-      baseIntensity = 0.60; // deload
+      intensity = 0.60; // deload
     }
   }
   
-  // v7.44 ELITE: Apply step-loading intensity modulation
-  const experienceLevel = athleteMode === 'advanced' || athleteMode === 'elite' ? 'advanced' :
-                          athleteMode === 'intermediate' || athleteMode === 'competition' ? 'intermediate' : 'beginner';
-  const stepIntensity = getStepLoadingIntensity(weekIndex, phase, baseIntensity, experienceLevel);
+  // v7.43 CRITICAL: Apply training age cap
+  intensity = Math.min(intensity, intensityCap);
   
-  // Apply cascading caps: training age → experience → absolute safety
-  let finalIntensity = stepIntensity;
-  finalIntensity = Math.min(finalIntensity, trainingAgeCap);
-  finalIntensity = Math.min(finalIntensity, experienceCap);
-  finalIntensity = Math.min(finalIntensity, 0.95); // Absolute safety cap
+  // Additional cap at 95% for safety
+  intensity = Math.min(intensity, 0.95);
   
-  return finalIntensity;
+  return intensity;
 }
 
 function chooseVariation(family, profile, weekIndex, phase, slotKey, dayIndex = 0) {
@@ -2390,9 +1939,6 @@ function generateBlockFromSetup() {
   showPage('Dashboard');
   notify('Training block generated');
   renderHistory();
-  
-  // v7.45: Auto-sync to cloud after generation
-  scheduleAutoSync();
 }
 
 function getAdjustedWorkingMax(profile, liftKey) {
@@ -4801,15 +4347,15 @@ function wireButtons() {
   $('btnGoWorkout')?.addEventListener('click', () => showPage('Workout'));
   
   // ========================================
-  // v7.45: CLOUD SYNC BUTTONS
+  // v7.45: Cloud Sync Buttons
   // ========================================
   
-  $('btnPushToCloud')?.addEventListener('click', async () => {
-    await pushBlockToCloud();
+  $('btnPushCloud')?.addEventListener('click', async () => {
+    await pushToCloud();
   });
   
-  $('btnPullFromCloud')?.addEventListener('click', async () => {
-    await pullBlocksFromCloud();
+  $('btnPullCloud')?.addEventListener('click', async () => {
+    await pullFromCloud();
   });
   
   // ========================================
@@ -5332,7 +4878,7 @@ function importCSV(csvText) {
 }
 
 function boot() {
-  // v7.45: Initialize Supabase for cloud sync
+  // v7.45: Initialize cloud sync
   initializeSupabase();
   
   wireButtons();
