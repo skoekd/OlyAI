@@ -45,15 +45,15 @@ function notify(msg) {
   console.log(msg);
 }
 
-// =================================================================
-// v7.45 CLOUD SYNC: Supabase Integration
-// =================================================================
+// ============================================================================
+// CLOUD SYNC - Minimal Implementation
+// ============================================================================
 
 const SUPABASE_URL = 'https://xbqlejwtfbeebucrdvqn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhicWxland0ZmJlZWJ1Y3JkdnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwODgzODEsImV4cCI6MjA4NTY2NDM4MX0.1RdmT3twtadvxTjdepaqSYaqZRFkOAMhWyRQOjf-Zp0';
-
 let supabase = null;
 
+// Get anonymous user ID
 function getAnonymousUserId() {
   let userId = localStorage.getItem('liftai_user_id');
   if (!userId) {
@@ -63,54 +63,35 @@ function getAnonymousUserId() {
   return userId;
 }
 
-function initializeSupabase() {
-  try {
-    if (typeof window.supabase !== 'undefined') {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('✅ Supabase initialized');
-      return true;
-    } else {
-      console.warn('⚠️ Supabase not loaded - cloud sync disabled');
-      return false;
+// Initialize Supabase (safe - won't crash if not loaded)
+function initSupabase() {
+  setTimeout(() => {
+    try {
+      if (window.supabase && window.supabase.createClient) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('✅ Cloud sync ready');
+      }
+    } catch (e) {
+      console.log('⚠️ Cloud sync unavailable');
     }
-  } catch (error) {
-    console.error('❌ Supabase init failed:', error);
-    return false;
-  }
+  }, 100);
 }
 
+// Push to cloud
 async function pushToCloud() {
   if (!supabase) {
-    notify('⚠️ Cloud sync not available');
-    return false;
+    notify('⚠️ Cloud sync not ready');
+    return;
   }
-  
-  if (!state.currentBlock || !state.currentBlock.weeks) {
+  if (!state.currentBlock) {
     notify('⚠️ No block to save');
-    return false;
+    return;
   }
   
   try {
-    notify('☁️ Saving to cloud...');
-    
+    notify('☁️ Saving...');
     const userId = getAnonymousUserId();
     const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
-    
-    const blockData = {
-      user_id: userId,
-      block_name: blockName,
-      block_data: state.currentBlock,
-      profile_data: {
-        name: state.profile.name,
-        maxes: state.profile.maxes,
-        programType: state.profile.programType,
-        volumePref: state.profile.volumePref,
-        duration: state.profile.duration
-      },
-      block_length: state.currentBlock.weeks.length,
-      program_type: state.profile.programType,
-      is_active: true
-    };
     
     const { data: existing } = await supabase
       .from('training_blocks')
@@ -119,46 +100,41 @@ async function pushToCloud() {
       .eq('block_name', blockName)
       .maybeSingle();
     
-    let result;
+    const blockData = {
+      user_id: userId,
+      block_name: blockName,
+      block_data: state.currentBlock,
+      profile_data: { maxes: state.profile.maxes },
+      block_length: state.currentBlock.weeks?.length || 0,
+      program_type: state.profile.programType || 'general',
+      is_active: true
+    };
+    
     if (existing?.id) {
-      result = await supabase
-        .from('training_blocks')
-        .update(blockData)
-        .eq('id', existing.id)
-        .select()
-        .single();
-      notify('✅ Block updated in cloud');
+      await supabase.from('training_blocks').update(blockData).eq('id', existing.id);
+      notify('✅ Updated in cloud');
     } else {
-      result = await supabase
-        .from('training_blocks')
-        .insert([blockData])
-        .select()
-        .single();
-      notify('✅ Block saved to cloud');
+      await supabase.from('training_blocks').insert([blockData]);
+      notify('✅ Saved to cloud');
     }
-    
-    if (result.error) throw result.error;
-    return true;
-    
-  } catch (error) {
-    console.error('Cloud sync error:', error);
-    notify('❌ Cloud sync failed');
-    return false;
+  } catch (e) {
+    notify('❌ Save failed');
+    console.error(e);
   }
 }
 
+// Pull from cloud
 async function pullFromCloud() {
   if (!supabase) {
-    notify('⚠️ Cloud sync not available');
+    notify('⚠️ Cloud sync not ready');
     return;
   }
   
   try {
-    notify('☁️ Loading from cloud...');
-    
+    notify('☁️ Loading...');
     const userId = getAnonymousUserId();
     
-    const { data: blocks, error } = await supabase
+    const { data: blocks } = await supabase
       .from('training_blocks')
       .select('*')
       .eq('user_id', userId)
@@ -166,114 +142,70 @@ async function pullFromCloud() {
       .order('updated_at', { ascending: false })
       .limit(20);
     
-    if (error) throw error;
-    
     if (!blocks || blocks.length === 0) {
-      notify('📦 No saved blocks found');
+      notify('📦 No saved blocks');
       return;
     }
     
-    showCloudBlocksModal(blocks);
-    
-  } catch (error) {
-    console.error('Pull error:', error);
-    notify('❌ Failed to load blocks');
+    showCloudModal(blocks);
+  } catch (e) {
+    notify('❌ Load failed');
+    console.error(e);
   }
 }
 
-function showCloudBlocksModal(blocks) {
-  const modalHTML = `
-    <div style="max-width:600px;padding:24px">
-      <h3 style="margin:0 0 8px 0">☁️ Saved Blocks</h3>
-      <p style="color:var(--text-dim);margin-bottom:20px">${blocks.length} block${blocks.length !== 1 ? 's' : ''} found</p>
-      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto">
-        ${blocks.map(b => `
-          <div onclick="restoreBlock('${b.id}')" style="
-            padding:16px;
-            background:rgba(59,130,246,0.1);
-            border:1px solid rgba(59,130,246,0.3);
-            border-radius:8px;
-            cursor:pointer;
-          ">
-            <div style="font-weight:600;margin-bottom:6px">${escapeHtml(b.block_name)}</div>
-            <div style="font-size:13px;color:var(--text-dim)">
-              ${b.block_length} weeks • ${b.program_type} • ${formatDate(b.updated_at)}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-      <div style="margin-top:20px">
-        <button class="btn secondary" onclick="closeCloudModal()">Cancel</button>
-      </div>
+// Show cloud blocks modal
+function showCloudModal(blocks) {
+  const html = blocks.map(b => `
+    <div onclick="window.restoreFromCloud('${b.id}')" style="padding:12px;margin:8px 0;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer;">
+      <div style="font-weight:600">${b.block_name.replace(/'/g, '&#39;')}</div>
+      <div style="font-size:13px;color:#9ca3af">${b.block_length} weeks • ${b.program_type}</div>
     </div>
-  `;
+  `).join('');
   
   const modal = document.createElement('div');
   modal.id = 'cloudModal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px';
-  modal.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:95%;max-height:90vh;overflow-y:auto">${modalHTML}</div>`;
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#111827;border-radius:12px;padding:24px;max-width:500px;width:100%;">
+      <h3 style="margin:0 0 16px 0">☁️ Saved Blocks</h3>
+      <div style="max-height:400px;overflow-y:auto;">${html}</div>
+      <button onclick="window.closeCloudModal()" style="margin-top:16px;width:100%;padding:10px;background:#374151;border:none;border-radius:8px;color:white;cursor:pointer;">Cancel</button>
+    </div>
+  `;
+  modal.onclick = (e) => { if (e.target === modal) window.closeCloudModal(); };
   document.body.appendChild(modal);
 }
 
-function closeCloudModal() {
-  document.getElementById('cloudModal')?.remove();
-}
-
-async function restoreBlock(blockId) {
+// Restore from cloud
+window.restoreFromCloud = async function(blockId) {
   try {
     notify('☁️ Restoring...');
-    
-    const { data, error } = await supabase
-      .from('training_blocks')
-      .select('*')
-      .eq('id', blockId)
-      .single();
-    
-    if (error) throw error;
-    
-    state.currentBlock = data.block_data;
-    if (data.profile_data) {
-      Object.assign(state.profile, data.profile_data);
+    const { data } = await supabase.from('training_blocks').select('*').eq('id', blockId).single();
+    if (data) {
+      state.currentBlock = data.block_data;
+      if (data.profile_data?.maxes) state.profile.maxes = data.profile_data.maxes;
+      saveState();
+      ui.weekIndex = 0;
+      renderDashboard();
+      renderWorkout();
+      window.closeCloudModal();
+      notify('✅ Restored');
     }
-    
-    saveState();
-    ui.weekIndex = 0;
-    renderDashboard();
-    renderWorkout();
-    closeCloudModal();
-    
-    notify('✅ Block restored');
-    
-  } catch (error) {
-    console.error('Restore error:', error);
+  } catch (e) {
     notify('❌ Restore failed');
+    console.error(e);
   }
-}
+};
 
-function formatDate(dateString) {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-}
+// Close modal
+window.closeCloudModal = function() {
+  document.getElementById('cloudModal')?.remove();
+};
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// =================================================================
+// ============================================================================
 // END CLOUD SYNC
-// =================================================================
+// ============================================================================
 
 
 // v7.16 STAGE 4: Rest Timer
@@ -4345,18 +4277,8 @@ function wireButtons() {
     notify('Demo maxes loaded');
   });
   $('btnGoWorkout')?.addEventListener('click', () => showPage('Workout'));
-  
-  // ========================================
-  // v7.45: Cloud Sync Buttons
-  // ========================================
-  
-  $('btnPushCloud')?.addEventListener('click', async () => {
-    await pushToCloud();
-  });
-  
-  $('btnPullCloud')?.addEventListener('click', async () => {
-    await pullFromCloud();
-  });
+  $('btnPushCloud')?.addEventListener('click', () => pushToCloud());
+  $('btnPullCloud')?.addEventListener('click', () => pullFromCloud());
   
   // ========================================
   // v7.41: Dashboard Import/Export Buttons
@@ -4878,9 +4800,6 @@ function importCSV(csvText) {
 }
 
 function boot() {
-  // v7.45: Initialize cloud sync
-  initializeSupabase();
-  
   wireButtons();
   bindWorkoutDetailControls();
   bindReadinessModal();
@@ -4889,6 +4808,7 @@ function boot() {
   if (state.currentBlock && state.currentBlock.weeks?.length) {
     ui.weekIndex = 0;
   }
+  initSupabase(); // Initialize cloud sync
 }
 
 document.addEventListener('DOMContentLoaded', boot);
