@@ -847,17 +847,94 @@ function computeWorkingMaxes(maxes) {
   };
 }
 
-function phaseForWeek(weekIndex) {
-  const w = weekIndex % 4;
-  if (w === 0 || w === 1) return 'accumulation';
-  if (w === 2) return 'intensification';
-  return 'deload';
+// v7.44 ELITE SYSTEM #1: ADVANCED MACRO-PERIODIZATION (STEP-LOADING)
+// Implements 3-weeks-up, 1-week-down mesocycles for 8-12 week blocks
+function phaseForWeek(weekIndex, blockLength = 8) {
+  // Step-loading mesocycle: 3 weeks loading, 1 week deload
+  const mesocycleWeek = weekIndex % 4; // Position within mesocycle (0-3)
+  
+  if (mesocycleWeek === 3) {
+    // Week 4 of each mesocycle: MINI-DELOAD
+    return 'deload';
+  } else if (mesocycleWeek === 0 || mesocycleWeek === 1) {
+    // Weeks 1-2: ACCUMULATION (volume emphasis)
+    return 'accumulation';
+  } else {
+    // Week 3: INTENSIFICATION (peak week before deload)
+    return 'intensification';
+  }
+}
+
+// v7.44 ELITE: Step-loading volume progression
+function getStepLoadingMultiplier(weekIndex, phase) {
+  const mesocycleWeek = weekIndex % 4;
+  const mesocycleNumber = Math.floor(weekIndex / 4); // 0, 1, 2... (which mesocycle)
+  
+  // Base progression within mesocycle
+  let volumeMultiplier = 1.0;
+  
+  if (phase === 'deload') {
+    // Week 4: -20% volume
+    volumeMultiplier = 0.80;
+  } else if (phase === 'accumulation') {
+    // Weeks 1-2: Standard volume
+    volumeMultiplier = mesocycleWeek === 0 ? 1.0 : 1.05; // Week 2 slightly higher
+  } else if (phase === 'intensification') {
+    // Week 3: +10% volume (peak before deload)
+    volumeMultiplier = 1.10;
+  }
+  
+  // Progressive overload across mesocycles: +2.5% per cycle
+  const mesocycleBonus = mesocycleNumber * 0.025;
+  
+  return volumeMultiplier * (1 + mesocycleBonus);
+}
+
+// v7.44 ELITE: Step-loading intensity progression
+function getStepLoadingIntensity(weekIndex, phase, baseIntensity, experienceLevel) {
+  const mesocycleWeek = weekIndex % 4;
+  const mesocycleNumber = Math.floor(weekIndex / 4);
+  
+  // Intensity caps based on experience
+  const intensityCap = experienceLevel === 'advanced' ? 0.95 : 
+                       experienceLevel === 'intermediate' ? 0.92 : 0.88;
+  
+  let intensity = baseIntensity;
+  
+  if (phase === 'deload') {
+    // Week 4: -10% intensity
+    intensity = baseIntensity * 0.90;
+  } else if (phase === 'intensification') {
+    // Week 3: Peak intensity
+    intensity = baseIntensity * 1.05;
+  }
+  
+  // Progressive overload: Each mesocycle starts 2.5% higher than previous
+  intensity += (mesocycleNumber * 0.025);
+  
+  // Apply experience-based cap
+  intensity = Math.min(intensity, intensityCap);
+  
+  return intensity;
 }
 
 function volumeFactorFor(profile, phase, weekIndex = 0) {
+  // v7.44 ELITE: Base volume from user preference
   const pref = profile.volumePref || 'reduced';
-  const base = (pref === 'standard') ? 1.0 : (pref === 'minimal' ? 0.6 : 0.8);
-  const phaseMult = (phase === 'accumulation') ? 1.0 : (phase === 'intensification' ? 0.85 : 0.6);
+  let base = 1.0;
+  
+  if (pref === 'minimal') {
+    base = 0.7; // Low volume: -1 set from accessories
+  } else if (pref === 'reduced') {
+    base = 0.85; // Standard reduced
+  } else if (pref === 'standard') {
+    base = 1.0; // Full volume
+  } else if (pref === 'high') {
+    base = 1.15; // High volume: +1 set to accessories, +1 rep to primary
+  }
+  
+  // v7.44 ELITE: Step-loading mesocycle multiplier
+  const stepLoadingMult = getStepLoadingMultiplier(weekIndex, phase);
   
   // Age-based volume adjustment for Masters athletes
   let ageMult = 1.0;
@@ -868,12 +945,7 @@ function volumeFactorFor(profile, phase, weekIndex = 0) {
     ageMult = 0.90; // Masters 40-49 = 90% volume
   }
   
-  // MESOCYCLE PROGRESSION: Wave-based volume bumps
-  const waveNumber = Math.floor(weekIndex / 4); // Wave 0, 1, 2...
-  const volumeBump = waveNumber * 0.05; // +5% per wave
-  const waveMult = Math.min(1 + volumeBump, 1.15); // Cap at +15%
-  
-  return base * phaseMult * ageMult * waveMult;
+  return base * stepLoadingMult * ageMult;
 }
 
 function transitionMultiplier(profile, weekIndex) {
@@ -1027,65 +1099,74 @@ function makeHypExercise(poolName, profile, weekIndex, slotKey, sets, reps, base
 
 
 function microIntensityFor(profile, phase, weekIndex) {
-  // v7.43 CRITICAL FIX #2: Block length-adaptive intensity curve
+  // v7.44 ELITE SYSTEM #1: Step-loading with experience-based intensity caps
   const blockLength = Number(profile.blockLength) || 8;
-  const progressRatio = blockLength > 1 ? weekIndex / (blockLength - 1) : 0; // 0.0 to 1.0
+  const progressRatio = blockLength > 1 ? weekIndex / (blockLength - 1) : 0;
   
-  // v7.43 CRITICAL FIX #3: Training age safety ceiling
+  // v7.43: Training age safety ceiling (preserved)
   const trainingAge = Number(profile.trainingAge) || 1;
-  let intensityCap = 1.00; // Default: no cap
+  let trainingAgeCap = 1.00;
   
   if (trainingAge < 1) {
-    intensityCap = 0.75; // <1 year: Max 75% (technique focus)
+    trainingAgeCap = 0.75;
   } else if (trainingAge < 2) {
-    intensityCap = 0.85; // 1-2 years: Max 85% (skill consolidation)
+    trainingAgeCap = 0.85;
   } else if (trainingAge < 3) {
-    intensityCap = 0.90; // 2-3 years: Max 90% (strength building)
+    trainingAgeCap = 0.90;
   }
-  // 3+ years: No cap (full intensity range available)
+  
+  // v7.44 ELITE: Experience level caps (92% intermediate, 95% advanced)
+  const athleteMode = profile.athleteMode || 'recreational';
+  let experienceCap = 0.88; // Recreational default
+  
+  if (athleteMode === 'advanced' || athleteMode === 'elite') {
+    experienceCap = 0.95; // Advanced athletes can use full range
+  } else if (athleteMode === 'intermediate' || athleteMode === 'competition') {
+    experienceCap = 0.92; // Intermediate cap at 92%
+  }
   
   const pt = (profile.programType || 'general');
-  let intensity = 0.70; // base
+  let baseIntensity = 0.70;
   
-  // v7.43 FIX: Program-specific intensity curves adapted to block length
+  // Program-specific base intensity curves
   if (pt === 'competition') {
-    // Competition Prep: 70% → 95% over entire block length
     const startIntensity = 0.70;
     const peakIntensity = 0.95;
     const range = peakIntensity - startIntensity;
-    // Exponential curve: slower start, faster finish (power of 0.8)
-    intensity = startIntensity + (range * Math.pow(progressRatio, 0.8));
+    baseIntensity = startIntensity + (range * Math.pow(progressRatio, 0.8));
   }
   else if (pt === 'maximum_strength') {
-    // Max Strength: 80% → 95% over block length
-    intensity = 0.80 + (0.15 * progressRatio);
+    baseIntensity = 0.80 + (0.15 * progressRatio);
   }
   else if (pt === 'powerbuilding') {
-    // Powerbuilding: 70% → 83% (moderate intensity)
-    intensity = 0.70 + (0.13 * progressRatio);
+    baseIntensity = 0.70 + (0.13 * progressRatio);
   }
   else if (pt === 'hypertrophy') {
-    // Hypertrophy: 68% → 80% (volume-focused)
-    intensity = 0.68 + (0.12 * progressRatio);
+    baseIntensity = 0.68 + (0.12 * progressRatio);
   }
   else {
-    // General: Phase-based with block adaptation
+    // General
     if (phase === 'accumulation') {
-      intensity = 0.70 + (0.10 * progressRatio); // 70% → 80%
+      baseIntensity = 0.70 + (0.10 * progressRatio);
     } else if (phase === 'intensification') {
-      intensity = 0.78 + (0.10 * progressRatio); // 78% → 88%
+      baseIntensity = 0.78 + (0.10 * progressRatio);
     } else {
-      intensity = 0.60; // deload
+      baseIntensity = 0.60; // deload
     }
   }
   
-  // v7.43 CRITICAL: Apply training age cap
-  intensity = Math.min(intensity, intensityCap);
+  // v7.44 ELITE: Apply step-loading intensity modulation
+  const experienceLevel = athleteMode === 'advanced' || athleteMode === 'elite' ? 'advanced' :
+                          athleteMode === 'intermediate' || athleteMode === 'competition' ? 'intermediate' : 'beginner';
+  const stepIntensity = getStepLoadingIntensity(weekIndex, phase, baseIntensity, experienceLevel);
   
-  // Additional cap at 95% for safety
-  intensity = Math.min(intensity, 0.95);
+  // Apply cascading caps: training age → experience → absolute safety
+  let finalIntensity = stepIntensity;
+  finalIntensity = Math.min(finalIntensity, trainingAgeCap);
+  finalIntensity = Math.min(finalIntensity, experienceCap);
+  finalIntensity = Math.min(finalIntensity, 0.95); // Absolute safety cap
   
-  return intensity;
+  return finalIntensity;
 }
 
 function chooseVariation(family, profile, weekIndex, phase, slotKey, dayIndex = 0) {
