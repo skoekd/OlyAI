@@ -45,6 +45,607 @@ function notify(msg) {
   console.log(msg);
 }
 
+// v7.45 CLOUD SYNC: Supabase configuration
+const SUPABASE_URL = 'https://xbqlejwtfbeebucrdvqn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhicWxland0ZmJlZWJ1Y3JkdnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwODgzODEsImV4cCI6MjA4NTY2NDM4MX0.1RdmT3twtadvxTjdepaqSYaqZRFkOAMhWyRQOjf-Zp0';
+
+// Initialize Supabase client (loaded from CDN)
+let supabase = null;
+
+// Get or create anonymous user ID
+function getAnonymousUserId() {
+  let userId = localStorage.getItem('liftai_user_id');
+  if (!userId) {
+    userId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('liftai_user_id', userId);
+    console.log('✅ Created new anonymous user ID:', userId);
+  }
+  return userId;
+}
+
+// Initialize Supabase when window loads
+function initializeSupabase() {
+  try {
+    if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log('✅ Supabase client initialized');
+      return true;
+    } else {
+      console.warn('⚠️ Supabase SDK not loaded - cloud sync disabled');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize Supabase:', error);
+    return false;
+  }
+}
+
+// Cloud Sync: Push current block to cloud
+async function pushBlockToCloud() {
+  if (!supabase) {
+    notify('⚠️ Cloud sync not available - please refresh the page');
+    return false;
+  }
+  
+  if (!state.currentBlock || !state.currentBlock.weeks || state.currentBlock.weeks.length === 0) {
+    notify('⚠️ No training block to save - generate a block first');
+    return false;
+  }
+  
+  try {
+    notify('☁️ Saving to cloud...');
+    
+    const userId = getAnonymousUserId();
+    const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
+    
+    // Prepare block data
+    const blockData = {
+      user_id: userId,
+      block_name: blockName,
+      block_data: state.currentBlock,
+      profile_data: {
+        name: state.profile.name || '',
+        maxes: state.profile.maxes || {},
+        programType: state.profile.programType || 'general',
+        athleteMode: state.profile.athleteMode || 'recreational',
+        volumePref: state.profile.volumePref || 'reduced',
+        duration: state.profile.duration || 75,
+        blockLength: state.profile.blockLength || 8,
+        trainingAge: state.profile.trainingAge || 1,
+        injuries: state.profile.injuries || []
+      },
+      block_length: state.currentBlock.weeks.length,
+      program_type: state.profile.programType || 'general',
+      is_active: true
+    };
+    
+    // Check if block already exists (by name for this user)
+    const { data: existing, error: searchError } = await supabase
+      .from('training_blocks')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('block_name', blockName)
+      .maybeSingle();
+    
+    if (searchError && searchError.code !== 'PGRST116') {
+      throw searchError;
+    }
+    
+    let result;
+    if (existing?.id) {
+      // Update existing block
+      result = await supabase
+        .from('training_blocks')
+        .update(blockData)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      
+      if (result.error) throw result.error;
+      
+      notify('✅ Training block updated in cloud');
+      console.log('✅ Block updated:', result.data.id);
+    } else {
+      // Insert new block
+      result = await supabase
+        .from('training_blocks')
+        .insert([blockData])
+        .select()
+        .single();
+      
+      if (result.error) throw result.error;
+      
+      notify('✅ Training block saved to cloud');
+      console.log('✅ Block saved:', result.data.id);
+    }
+    
+    // Store cloud ID
+    if (result.data?.id) {
+      localStorage.setItem('liftai_last_cloud_block_id', result.data.id);
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Cloud sync error:', error);
+    notify('❌ Cloud sync failed: ' + (error.message || 'Unknown error'));
+    return false;
+  }
+}
+
+// Cloud Sync: Pull blocks from cloud and show selection modal
+async function pullBlocksFromCloud() {
+  if (!supabase) {
+    notify('⚠️ Cloud sync not available - please refresh the page');
+    return;
+  }
+  
+  try {
+    notify('☁️ Loading blocks from cloud...');
+    
+    const userId = getAnonymousUserId();
+    
+    const { data: blocks, error } = await supabase
+      .from('training_blocks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    
+    if (error) throw error;
+    
+    if (!blocks || blocks.length === 0) {
+      notify('📦 No saved blocks found in cloud');
+      return;
+    }
+    
+    console.log(`✅ Found ${blocks.length} blocks in cloud`);
+    
+    // Show selection modal
+    showCloudBlocksModal(blocks);
+    
+  } catch (error) {
+    console.error('❌ Failed to load blocks:', error);
+    notify('❌ Failed to load blocks: ' + (error.message || 'Unknown error'));
+  }
+}
+
+// Show cloud blocks selection modal
+function showCloudBlocksModal(blocks) {
+  const modalContent = `
+    <div style="max-width:600px">
+      <h3 style="margin:0 0 8px 0;font-size:18px">☁️ Saved Training Blocks</h3>
+      <p style="color:var(--text-dim);margin-bottom:20px;font-size:14px">
+        ${blocks.length} block${blocks.length !== 1 ? 's' : ''} found • Click to restore
+      </p>
+      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto;padding-right:8px">
+        ${blocks.map(block => `
+          <div class="cloud-block-card" onclick="restoreBlockFromCloud('${block.id}')" style="
+            padding:16px;
+            background:rgba(59,130,246,0.08);
+            border:1px solid rgba(59,130,246,0.2);
+            border-radius:10px;
+            cursor:pointer;
+            transition:all 0.2s;
+          " onmouseover="this.style.background='rgba(59,130,246,0.15)';this.style.borderColor='rgba(59,130,246,0.4)'" 
+             onmouseout="this.style.background='rgba(59,130,246,0.08)';this.style.borderColor='rgba(59,130,246,0.2)'">
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">${escapeHtml(block.block_name)}</div>
+            <div style="font-size:13px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:12px">
+              <span>📅 ${block.block_length} weeks</span>
+              <span>💪 ${block.program_type}</span>
+              <span>🕐 ${formatDate(block.updated_at)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:20px;display:flex;gap:10px">
+        <button class="btn secondary" onclick="closeCloudModal()" style="flex:1">Cancel</button>
+      </div>
+    </div>
+  `;
+  
+  // Create modal
+  const modal = document.createElement('div');
+  modal.id = 'cloudBlocksModal';
+  modal.innerHTML = `
+    <div style="
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.8);
+      backdrop-filter:blur(4px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:10000;
+      padding:20px;
+      animation:fadeIn 0.2s;
+    " onclick="if(event.target===this) closeCloudModal()">
+      <div style="
+        background:var(--card);
+        border-radius:16px;
+        padding:24px;
+        max-width:95%;
+        max-height:90vh;
+        overflow-y:auto;
+        box-shadow:0 20px 60px rgba(0,0,0,0.5);
+      " onclick="event.stopPropagation()">
+        ${modalContent}
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+// Close cloud blocks modal
+function closeCloudModal() {
+  const modal = document.getElementById('cloudBlocksModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// Restore a specific block from cloud
+async function restoreBlockFromCloud(blockId) {
+  if (!supabase) {
+    notify('⚠️ Cloud sync not available');
+    return false;
+  }
+  
+  try {
+    notify('☁️ Restoring block...');
+    
+    const { data: block, error } = await supabase
+      .from('training_blocks')
+      .select('*')
+      .eq('id', blockId)
+      .single();
+    
+    if (error) throw error;
+    
+    if (!block) {
+      notify('❌ Block not found');
+      return false;
+    }
+    
+    // Restore block data
+    state.currentBlock = block.block_data;
+    
+    // Restore profile data if available
+    if (block.profile_data) {
+      if (block.profile_data.name) state.profile.name = block.profile_data.name;
+      if (block.profile_data.maxes) state.profile.maxes = block.profile_data.maxes;
+      if (block.profile_data.programType) state.profile.programType = block.profile_data.programType;
+      if (block.profile_data.athleteMode) state.profile.athleteMode = block.profile_data.athleteMode;
+      if (block.profile_data.volumePref) state.profile.volumePref = block.profile_data.volumePref;
+      if (block.profile_data.duration) state.profile.duration = block.profile_data.duration;
+      if (block.profile_data.blockLength) state.profile.blockLength = block.profile_data.blockLength;
+      if (block.profile_data.trainingAge) state.profile.trainingAge = block.profile_data.trainingAge;
+      if (block.profile_data.injuries) state.profile.injuries = block.profile_data.injuries;
+    }
+    
+    // Save to localStorage
+    saveState();
+    
+    // Update UI
+    ui.weekIndex = 0;
+    renderDashboard();
+    renderWorkout();
+    renderHistory();
+    
+    // Close modal
+    closeCloudModal();
+    
+    // Show success
+    notify(`✅ Restored: ${block.block_name}`);
+    console.log('✅ Block restored:', block.block_name);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Restore error:', error);
+    notify('❌ Failed to restore block: ' + (error.message || 'Unknown error'));
+    return false;
+  }
+}
+
+// Helper: Format date for display
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  return date.toLocaleDateString();
+}
+
+// Helper: Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Auto-sync: Automatically push to cloud after block generation
+function scheduleAutoSync() {
+  if (!supabase || !state.currentBlock) return;
+  
+  // Auto-save after 3 seconds (debounced)
+  clearTimeout(scheduleAutoSync.timer);
+  scheduleAutoSync.timer = setTimeout(() => {
+    console.log('🔄 Auto-syncing to cloud...');
+    pushBlockToCloud();
+  }, 3000);
+}
+
+// Initialize Supabase client (will be loaded from CDN)
+let supabaseClient = null;
+
+// Get or create anonymous user ID
+function getAnonymousUserId() {
+  let userId = localStorage.getItem('liftai_user_id');
+  if (!userId) {
+    userId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('liftai_user_id', userId);
+  }
+  return userId;
+}
+
+// Initialize Supabase when DOM is ready
+function initializeSupabase() {
+  if (typeof window.supabase !== 'undefined') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Supabase initialized');
+  } else {
+    console.warn('⚠️ Supabase SDK not loaded - cloud sync disabled');
+  }
+}
+
+// Cloud Sync: Push current block to Supabase
+async function pushBlockToCloud() {
+  if (!supabaseClient) {
+    notify('⚠️ Cloud sync not available - Supabase not loaded');
+    return false;
+  }
+  
+  if (!state.currentBlock) {
+    notify('⚠️ No training block to sync');
+    return false;
+  }
+  
+  try {
+    const userId = getAnonymousUserId();
+    const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
+    
+    // Prepare data
+    const blockData = {
+      user_id: userId,
+      block_name: blockName,
+      block_data: state.currentBlock,
+      profile_data: {
+        maxes: state.profile.maxes,
+        preferences: {
+          programType: state.profile.programType,
+          athleteMode: state.profile.athleteMode,
+          volumePref: state.profile.volumePref,
+          duration: state.profile.duration,
+          blockLength: state.profile.blockLength,
+          trainingAge: state.profile.trainingAge,
+          injuries: state.profile.injuries
+        }
+      },
+      block_length: state.currentBlock.weeks?.length || 0,
+      program_type: state.profile.programType || 'general',
+      is_active: true
+    };
+    
+    // Check if block already exists
+    const existingBlock = await supabaseClient
+      .from('training_blocks')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('block_name', blockName)
+      .maybeSingle();
+    
+    let result;
+    if (existingBlock?.data?.id) {
+      // Update existing
+      result = await supabaseClient
+        .from('training_blocks')
+        .update(blockData)
+        .eq('id', existingBlock.data.id)
+        .select()
+        .single();
+      
+      notify('☁️ Training block updated in cloud');
+    } else {
+      // Insert new
+      result = await supabaseClient
+        .from('training_blocks')
+        .insert(blockData)
+        .select()
+        .single();
+      
+      notify('☁️ Training block saved to cloud');
+    }
+    
+    if (result.error) {
+      console.error('Supabase error:', result.error);
+      notify('❌ Cloud sync failed: ' + result.error.message);
+      return false;
+    }
+    
+    // Store the cloud ID in localStorage
+    if (result.data?.id) {
+      localStorage.setItem('liftai_cloud_block_id', result.data.id);
+    }
+    
+    console.log('✅ Block synced to cloud:', result.data);
+    return true;
+    
+  } catch (error) {
+    console.error('Cloud sync error:', error);
+    notify('❌ Cloud sync failed: ' + error.message);
+    return false;
+  }
+}
+
+// Cloud Sync: Pull blocks from Supabase
+async function pullBlocksFromCloud() {
+  if (!supabaseClient) {
+    notify('⚠️ Cloud sync not available - Supabase not loaded');
+    return [];
+  }
+  
+  try {
+    const userId = getAnonymousUserId();
+    
+    const { data, error } = await supabaseClient
+      .from('training_blocks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      notify('❌ Failed to load blocks from cloud: ' + error.message);
+      return [];
+    }
+    
+    console.log(`✅ Loaded ${data?.length || 0} blocks from cloud`);
+    return data || [];
+    
+  } catch (error) {
+    console.error('Cloud sync error:', error);
+    notify('❌ Failed to load blocks from cloud: ' + error.message);
+    return [];
+  }
+}
+
+// Cloud Sync: Restore a specific block
+async function restoreBlockFromCloud(blockId) {
+  if (!supabaseClient) {
+    notify('⚠️ Cloud sync not available');
+    return false;
+  }
+  
+  try {
+    const { data, error } = await supabaseClient
+      .from('training_blocks')
+      .select('*')
+      .eq('id', blockId)
+      .single();
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      notify('❌ Failed to restore block: ' + error.error);
+      return false;
+    }
+    
+    if (!data) {
+      notify('❌ Block not found');
+      return false;
+    }
+    
+    // Restore the block
+    state.currentBlock = data.block_data;
+    
+    // Restore profile if available
+    if (data.profile_data) {
+      if (data.profile_data.maxes) {
+        state.profile.maxes = data.profile_data.maxes;
+      }
+      if (data.profile_data.preferences) {
+        Object.assign(state.profile, data.profile_data.preferences);
+      }
+    }
+    
+    // Save to localStorage
+    saveState();
+    
+    // Update UI
+    ui.weekIndex = 0;
+    renderDashboard();
+    renderWorkout();
+    renderHistory();
+    
+    notify('✅ Training block restored from cloud');
+    console.log('✅ Block restored:', data.block_name);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Restore error:', error);
+    notify('❌ Failed to restore block: ' + error.message);
+    return false;
+  }
+}
+
+// Cloud Sync: Show cloud blocks modal
+async function showCloudBlocksModal() {
+  const blocks = await pullBlocksFromCloud();
+  
+  if (blocks.length === 0) {
+    notify('📦 No saved blocks found in cloud');
+    return;
+  }
+  
+  const modalHTML = `
+    <div style="padding:20px">
+      <h3 style="margin-top:0">☁️ Cloud Saved Blocks</h3>
+      <p style="color:var(--text-dim);margin-bottom:20px">
+        ${blocks.length} training block${blocks.length !== 1 ? 's' : ''} found
+      </p>
+      <div style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto">
+        ${blocks.map(block => `
+          <div style="padding:15px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer"
+               onclick="restoreBlockFromCloud('${block.id}'); closeModal()">
+            <div style="font-weight:600;margin-bottom:5px">${block.block_name}</div>
+            <div style="font-size:13px;color:var(--text-dim)">
+              ${block.block_length} weeks • ${block.program_type}
+              <br>Last updated: ${new Date(block.updated_at).toLocaleString()}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:20px;display:flex;gap:10px">
+        <button class="btn secondary" onclick="closeModal()" style="flex:1">Cancel</button>
+      </div>
+    </div>
+  `;
+  
+  openModal('Cloud Saved Blocks', '', modalHTML);
+}
+
+function closeModal() {
+  const modalOverlay = document.getElementById('modalOverlay');
+  if (modalOverlay) {
+    modalOverlay.classList.remove('show');
+  }
+}
+
+// Auto-sync: Save to cloud when block changes (debounced)
+let autoSyncTimeout = null;
+function scheduleAutoSync() {
+  if (!supabaseClient) return;
+  
+  clearTimeout(autoSyncTimeout);
+  autoSyncTimeout = setTimeout(() => {
+    if (state.currentBlock) {
+      pushBlockToCloud();
+    }
+  }, 5000); // 5 second delay
+}
+
 // v7.16 STAGE 4: Rest Timer
 let restTimer = {
   active: false,
@@ -1789,6 +2390,9 @@ function generateBlockFromSetup() {
   showPage('Dashboard');
   notify('Training block generated');
   renderHistory();
+  
+  // v7.45: Auto-sync to cloud after generation
+  scheduleAutoSync();
 }
 
 function getAdjustedWorkingMax(profile, liftKey) {
@@ -4197,6 +4801,18 @@ function wireButtons() {
   $('btnGoWorkout')?.addEventListener('click', () => showPage('Workout'));
   
   // ========================================
+  // v7.45: CLOUD SYNC BUTTONS
+  // ========================================
+  
+  $('btnPushToCloud')?.addEventListener('click', async () => {
+    await pushBlockToCloud();
+  });
+  
+  $('btnPullFromCloud')?.addEventListener('click', async () => {
+    await pullBlocksFromCloud();
+  });
+  
+  // ========================================
   // v7.41: Dashboard Import/Export Buttons
   // ========================================
   
@@ -4716,6 +5332,9 @@ function importCSV(csvText) {
 }
 
 function boot() {
+  // v7.45: Initialize Supabase for cloud sync
+  initializeSupabase();
+  
   wireButtons();
   bindWorkoutDetailControls();
   bindReadinessModal();
