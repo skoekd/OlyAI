@@ -49,16 +49,26 @@ function notify(msg) {
 // CLOUD SYNC - Minimal Implementation
 // ============================================================================
 
+// ============================================================================
+// SUPABASE CLOUD SYNC - REFACTORED FOR ACTUAL SCHEMA
+// ============================================================================
+
 const SUPABASE_URL = 'https://xbqlejwtfbeebucrdvqn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhicWxland0ZmJlZWJ1Y3JkdnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwODgzODEsImV4cCI6MjA4NTY2NDM4MX0.1RdmT3twtadvxTjdepaqSYaqZRFkOAMhWyRQOjf-Zp0';
+
+// Global Supabase client
 let supabaseClient = null;
 
-// Get anonymous user ID
+// Get anonymous user ID (stable across sessions)
 function getAnonymousUserId() {
   let userId = localStorage.getItem('liftai_user_id');
   if (!userId) {
-    userId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    // Create a stable user ID based on browser fingerprint
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    userId = `athlete_${timestamp}_${random}`;
     localStorage.setItem('liftai_user_id', userId);
+    console.log('✓ Created new user ID:', userId);
   }
   return userId;
 }
@@ -76,11 +86,18 @@ function initSupabase() {
       try {
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         clearInterval(pollInterval);
-        console.log('✅ Cloud sync ready');
-        notify('☁️ Cloud sync enabled');
+        console.log(`✅ Cloud sync ready (${attempts * 100}ms)`);
+        
+        // Test connection by attempting to query
+        testSupabaseConnection();
+        
+        // Show brief success indicator
+        showCloudNotification('success', '☁️ Cloud sync enabled');
+        
       } catch (e) {
         console.error('❌ Failed to initialize Supabase:', e);
         clearInterval(pollInterval);
+        showCloudNotification('error', `Initialization failed: ${e.message}`);
       }
       return;
     }
@@ -88,151 +105,470 @@ function initSupabase() {
     // Timeout after 5 seconds
     if (attempts >= maxAttempts) {
       clearInterval(pollInterval);
-      console.warn('⚠️ Cloud sync unavailable (timeout)');
+      console.warn(`⚠️ Cloud sync unavailable (timeout after ${maxAttempts * 100}ms)`);
+      showCloudNotification('warning', 'Cloud sync unavailable (app still works)');
     }
   }, 100);
 }
 
-// Push to cloud
+// Test Supabase connection
+async function testSupabaseConnection() {
+  if (!supabaseClient) return;
+  
+  try {
+    const userId = getAnonymousUserId();
+    // Simple count query to test connection
+    const { count, error } = await supabaseClient
+      .from('training_blocks')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.warn('⚠️ Supabase connection test failed:', error.message);
+      return false;
+    }
+    
+    console.log(`✓ Supabase connection verified (${count || 0} blocks found)`);
+    return true;
+  } catch (e) {
+    console.warn('⚠️ Connection test error:', e);
+    return false;
+  }
+}
+
+// Push current block to cloud
 async function pushToCloud() {
   // Safety check
   if (!supabaseClient) {
     console.warn('Supabase not ready');
-    notify('⚠️ Cloud sync not ready');
+    showCloudNotification('warning', 'Cloud sync not ready');
     return;
   }
   
   if (!state.currentBlock) {
-    notify('⚠️ No block to save');
+    showCloudNotification('warning', 'No block to save');
     return;
   }
   
   try {
-    notify('☁️ Saving...');
-    const userId = getAnonymousUserId();
-    const blockName = state.currentBlock.name || `Block ${new Date().toLocaleDateString()}`;
+    showCloudNotification('info', 'Saving to cloud...');
     
-    const { data: existing } = await supabaseClient
+    const userId = getAnonymousUserId();
+    const profile = getProfile();
+    
+    // Get block name (use existing or create descriptive one)
+    let blockName = state.currentBlock.name;
+    if (!blockName || blockName.trim() === '') {
+      const date = new Date().toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+      blockName = `${profile.programType || 'Training'} Block - ${date}`;
+    }
+    
+    // Prepare payload matching EXACT schema
+    const payload = {
+      user_id: userId,
+      block_name: blockName,
+      block_data: state.currentBlock, // Supabase auto-converts to JSONB
+      profile_data: {
+        maxes: profile.maxes,
+        workingMaxes: profile.workingMaxes,
+        units: profile.units,
+        programType: profile.programType,
+        volumePref: profile.volumePref,
+        blockLength: profile.blockLength,
+        // Include athlete details if they exist
+        athleteDetails: state.athleteDetails || null
+      },
+      is_active: true
+    };
+    
+    console.log('📤 Uploading payload:', {
+      user_id: payload.user_id,
+      block_name: payload.block_name,
+      block_data_keys: Object.keys(payload.block_data || {}),
+      profile_data_keys: Object.keys(payload.profile_data || {})
+    });
+    
+    // Check if block already exists for this user with same name
+    const { data: existing, error: searchError } = await supabaseClient
       .from('training_blocks')
       .select('id')
       .eq('user_id', userId)
       .eq('block_name', blockName)
       .maybeSingle();
     
-    const blockData = {
-      user_id: userId,
-      block_name: blockName,
-      block_data: state.currentBlock,
-      profile_data: { maxes: state.profile.maxes },
-      block_length: state.currentBlock.weeks?.length || 0,
-      program_type: state.profile.programType || 'general',
-      is_active: true
-    };
-    
-    if (existing?.id) {
-      await supabaseClient.from('training_blocks').update(blockData).eq('id', existing.id);
-      notify('✅ Updated in cloud');
-    } else {
-      await supabaseClient.from('training_blocks').insert([blockData]);
-      notify('✅ Saved to cloud');
+    if (searchError) {
+      console.error('Error checking for existing block:', searchError);
+      throw searchError;
     }
+    
+    if (existing && existing.id) {
+      // Update existing block
+      console.log('📝 Updating existing block:', existing.id);
+      
+      const { data, error } = await supabaseClient
+        .from('training_blocks')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Update error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Block updated:', data);
+      showCloudNotification('success', 'Block updated in cloud');
+      
+    } else {
+      // Insert new block
+      console.log('📝 Creating new block');
+      
+      const { data, error } = await supabaseClient
+        .from('training_blocks')
+        .insert([payload])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Block created:', data);
+      showCloudNotification('success', 'Block saved to cloud');
+    }
+    
   } catch (e) {
-    notify('❌ Save failed');
-    console.error(e);
+    console.error('❌ Push to cloud failed:', e);
+    showCloudNotification('error', `Save failed: ${e.message}`);
   }
 }
 
-// Pull from cloud
+// Pull blocks from cloud
 async function pullFromCloud() {
   // Safety check
   if (!supabaseClient) {
     console.warn('Supabase not ready');
-    notify('⚠️ Cloud sync not ready');
+    showCloudNotification('warning', 'Cloud sync not ready');
     return;
   }
   
   try {
-    notify('☁️ Loading...');
+    showCloudNotification('info', 'Loading from cloud...');
+    
     const userId = getAnonymousUserId();
     
-    const { data: blocks } = await supabaseClient
+    console.log('📥 Fetching blocks for user:', userId);
+    
+    // Fetch all active blocks for this user
+    const { data: blocks, error } = await supabaseClient
       .from('training_blocks')
       .select('*')
       .eq('user_id', userId)
       .eq('is_active', true)
-      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false }) // Most recent first (by creation order)
       .limit(20);
     
+    if (error) {
+      console.error('Fetch error:', error);
+      throw error;
+    }
+    
+    console.log(`✅ Fetched ${blocks?.length || 0} blocks`);
+    
     if (!blocks || blocks.length === 0) {
-      notify('📦 No saved blocks');
+      showCloudNotification('info', 'No saved blocks found');
       return;
     }
     
-    showCloudModal(blocks);
+    // Validate that blocks have the required data
+    const validBlocks = blocks.filter(b => {
+      const valid = b.block_data && typeof b.block_data === 'object';
+      if (!valid) {
+        console.warn('Invalid block data:', b);
+      }
+      return valid;
+    });
+    
+    if (validBlocks.length === 0) {
+      showCloudNotification('warning', 'Found blocks but data is invalid');
+      return;
+    }
+    
+    console.log(`✓ ${validBlocks.length} valid blocks ready to display`);
+    
+    // Show modal with blocks
+    showCloudBlocksModal(validBlocks);
+    
   } catch (e) {
-    notify('❌ Load failed');
-    console.error(e);
+    console.error('❌ Pull from cloud failed:', e);
+    showCloudNotification('error', `Load failed: ${e.message}`);
   }
 }
 
-// Show cloud blocks modal
-function showCloudModal(blocks) {
-  const html = blocks.map(b => `
-    <div onclick="window.restoreFromCloud('${b.id}')" style="padding:12px;margin:8px 0;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer;">
-      <div style="font-weight:600">${b.block_name.replace(/'/g, '&#39;')}</div>
-      <div style="font-size:13px;color:#9ca3af">${b.block_length} weeks • ${b.program_type}</div>
-    </div>
-  `).join('');
+// Show modal with available blocks
+function showCloudBlocksModal(blocks) {
+  // Remove any existing modal
+  const existingModal = document.getElementById('cloudModal');
+  if (existingModal) existingModal.remove();
+  
+  const html = blocks.map(b => {
+    const blockLength = b.block_data?.blockLength || b.block_data?.weeks?.length || 0;
+    const programType = b.profile_data?.programType || 'general';
+    
+    return `
+      <div 
+        onclick="window.restoreFromCloud('${b.id}')" 
+        style="
+          padding: 14px 16px;
+          margin: 10px 0;
+          background: rgba(59,130,246,0.1);
+          border: 1px solid rgba(59,130,246,0.3);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+        "
+        onmouseover="this.style.background='rgba(59,130,246,0.2)'; this.style.borderColor='rgba(59,130,246,0.5)'"
+        onmouseout="this.style.background='rgba(59,130,246,0.1)'; this.style.borderColor='rgba(59,130,246,0.3)'"
+      >
+        <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">
+          ${escapeHtml(b.block_name)}
+        </div>
+        <div style="font-size: 13px; color: #9ca3af;">
+          ${blockLength} weeks • ${programType}
+        </div>
+      </div>
+    `;
+  }).join('');
   
   const modal = document.createElement('div');
   modal.id = 'cloudModal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease-out;
+  `;
+  
   modal.innerHTML = `
-    <div style="background:#111827;border-radius:12px;padding:24px;max-width:500px;width:100%;">
-      <h3 style="margin:0 0 16px 0">☁️ Saved Blocks</h3>
-      <div style="max-height:400px;overflow-y:auto;">${html}</div>
-      <button onclick="window.closeCloudModal()" style="margin-top:16px;width:100%;padding:10px;background:#374151;border:none;border-radius:8px;color:white;cursor:pointer;">Cancel</button>
+    <div style="
+      background: #111827;
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 520px;
+      width: 100%;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    ">
+      <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 700;">
+        ☁️ Saved Training Blocks
+      </h3>
+      <div style="
+        flex: 1;
+        overflow-y: auto;
+        margin: 0 -8px;
+        padding: 0 8px;
+      ">
+        ${html}
+      </div>
+      <button 
+        onclick="window.closeCloudModal()" 
+        style="
+          margin-top: 20px;
+          width: 100%;
+          padding: 12px;
+          background: #374151;
+          border: none;
+          border-radius: 10px;
+          color: white;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s;
+        "
+        onmouseover="this.style.background='#4b5563'"
+        onmouseout="this.style.background='#374151'"
+      >
+        Cancel
+      </button>
     </div>
   `;
-  modal.onclick = (e) => { if (e.target === modal) window.closeCloudModal(); };
+  
+  modal.onclick = (e) => {
+    if (e.target === modal) window.closeCloudModal();
+  };
+  
   document.body.appendChild(modal);
 }
 
-// Restore from cloud
+// Restore a block from cloud
 window.restoreFromCloud = async function(blockId) {
   // Safety check
   if (!supabaseClient) {
     console.warn('Supabase not ready');
-    notify('⚠️ Cloud sync not ready');
+    showCloudNotification('warning', 'Cloud sync not ready');
+    return;
+  }
+  
+  if (!blockId) {
+    console.error('No block ID provided');
     return;
   }
   
   try {
-    notify('☁️ Restoring...');
-    const { data } = await supabaseClient.from('training_blocks').select('*').eq('id', blockId).single();
-    if (data) {
-      state.currentBlock = data.block_data;
-      if (data.profile_data?.maxes) state.profile.maxes = data.profile_data.maxes;
-      saveState();
-      ui.weekIndex = 0;
-      renderDashboard();
-      renderWorkout();
-      window.closeCloudModal();
-      notify('✅ Restored');
+    showCloudNotification('info', 'Restoring block...');
+    
+    console.log('📥 Restoring block:', blockId);
+    
+    const { data, error } = await supabaseClient
+      .from('training_blocks')
+      .select('*')
+      .eq('id', blockId)
+      .single();
+    
+    if (error) {
+      console.error('Restore error:', error);
+      throw error;
     }
+    
+    if (!data) {
+      throw new Error('Block not found');
+    }
+    
+    console.log('✅ Block retrieved:', data);
+    
+    // Validate block data
+    if (!data.block_data || typeof data.block_data !== 'object') {
+      throw new Error('Invalid block data structure');
+    }
+    
+    // Restore block data to state
+    state.currentBlock = data.block_data;
+    
+    // Restore profile data if available
+    if (data.profile_data && typeof data.profile_data === 'object') {
+      const profile = getProfile();
+      
+      // Restore maxes
+      if (data.profile_data.maxes) {
+        profile.maxes = { ...profile.maxes, ...data.profile_data.maxes };
+      }
+      
+      // Restore working maxes
+      if (data.profile_data.workingMaxes) {
+        profile.workingMaxes = { ...profile.workingMaxes, ...data.profile_data.workingMaxes };
+      }
+      
+      // Restore other settings
+      if (data.profile_data.units) profile.units = data.profile_data.units;
+      if (data.profile_data.programType) profile.programType = data.profile_data.programType;
+      if (data.profile_data.volumePref) profile.volumePref = data.profile_data.volumePref;
+      if (data.profile_data.blockLength) profile.blockLength = data.profile_data.blockLength;
+      
+      console.log('✓ Profile data restored');
+    }
+    
+    // Save to localStorage
+    saveState();
+    
+    // Reset UI
+    ui.weekIndex = 0;
+    
+    // Refresh UI
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if (typeof renderWorkout === 'function') renderWorkout();
+    if (typeof showPage === 'function') showPage('Dashboard');
+    
+    // Close modal
+    window.closeCloudModal();
+    
+    console.log('✅ Block restored successfully');
+    showCloudNotification('success', 'Block restored!');
+    
   } catch (e) {
-    notify('❌ Restore failed');
-    console.error(e);
+    console.error('❌ Restore failed:', e);
+    showCloudNotification('error', `Restore failed: ${e.message}`);
   }
 };
 
-// Close modal
+// Close cloud modal
 window.closeCloudModal = function() {
-  document.getElementById('cloudModal')?.remove();
+  const modal = document.getElementById('cloudModal');
+  if (modal) {
+    modal.style.animation = 'fadeOut 0.2s ease-in';
+    setTimeout(() => modal.remove(), 200);
+  }
 };
 
+// Helper: Escape HTML to prevent XSS
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe
+    .toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Helper: Show cloud notification
+function showCloudNotification(type, message) {
+  const colors = {
+    success: 'rgba(16, 185, 129, 0.95)',
+    error: 'rgba(239, 68, 68, 0.95)',
+    warning: 'rgba(245, 158, 11, 0.95)',
+    info: 'rgba(59, 130, 246, 0.95)'
+  };
+  
+  const color = colors[type] || colors.info;
+  
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    background: ${color};
+    color: white;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    max-width: 320px;
+  `;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Auto-dismiss
+  const duration = type === 'error' ? 5000 : 3000;
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease-in';
+    setTimeout(() => notification.remove(), 300);
+  }, duration);
+}
+
 // ============================================================================
-// END CLOUD SYNC
+// END SUPABASE CLOUD SYNC
+// ============================================================================
 // ============================================================================
 
 
@@ -900,8 +1236,23 @@ const DEFAULT_STATE = () => ({
   blockHistory: [] // v7.24: Store completed blocks
 });
 
-let state = loadState();
+let state;
 let ui = { currentPage: 'Setup', weekIndex: 0 };
+
+// Safe state initialization with error handling
+try {
+  state = loadState();
+  console.log('✓ State loaded successfully');
+} catch (error) {
+  console.error('Failed to load state, using defaults:', error);
+  state = DEFAULT_STATE();
+  // Try to save the default state
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (saveError) {
+    console.warn('Cannot save to localStorage:', saveError);
+  }
+}
 
 /**
  * Calculate appropriate pull percentage offset based on phase and lift type
@@ -951,28 +1302,88 @@ function getPullOffset(phase, pullType) {
 }
 
 function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const parsed = raw ? safeJsonParse(raw, null) : null;
-  if (!parsed || typeof parsed !== 'object') return DEFAULT_STATE();
-  const s = Object.assign(DEFAULT_STATE(), parsed);
-  if (!s.profiles || typeof s.profiles !== 'object') {
-    s.profiles = { Default: DEFAULT_PROFILE() };
-  }
-  if (!s.activeProfile || !s.profiles[s.activeProfile]) {
-    s.activeProfile = Object.keys(s.profiles)[0] || 'Default';
-  }
-  Object.keys(s.profiles).forEach(profileName => {
-    const p = s.profiles[profileName];
-    const defaults = DEFAULT_PROFILE();
-    Object.keys(defaults).forEach(key => {
-      if (!(key in p)) p[key] = defaults[key];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      console.log('No saved state found, using defaults');
+      return DEFAULT_STATE();
+    }
+    
+    const parsed = safeJsonParse(raw, null);
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('Invalid state data, using defaults');
+      return DEFAULT_STATE();
+    }
+    
+    const s = Object.assign(DEFAULT_STATE(), parsed);
+    
+    // Validate profiles
+    if (!s.profiles || typeof s.profiles !== 'object') {
+      console.warn('Invalid profiles, resetting to default');
+      s.profiles = { Default: DEFAULT_PROFILE() };
+    }
+    
+    // Validate active profile
+    if (!s.activeProfile || !s.profiles[s.activeProfile]) {
+      console.warn('Invalid active profile, selecting first available');
+      s.activeProfile = Object.keys(s.profiles)[0] || 'Default';
+      if (!s.profiles[s.activeProfile]) {
+        s.profiles.Default = DEFAULT_PROFILE();
+        s.activeProfile = 'Default';
+      }
+    }
+    
+    // Ensure all profiles have required fields
+    Object.keys(s.profiles).forEach(profileName => {
+      const p = s.profiles[profileName];
+      const defaults = DEFAULT_PROFILE();
+      Object.keys(defaults).forEach(key => {
+        if (!(key in p)) {
+          p[key] = defaults[key];
+        }
+      });
     });
-  });
-  return s;
+    
+    console.log('✓ State loaded and validated');
+    return s;
+    
+  } catch (error) {
+    console.error('Error loading state, using defaults:', error);
+    return DEFAULT_STATE();
+  }
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    const serialized = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    return true;
+  } catch (error) {
+    console.error('Failed to save state:', error);
+    
+    // Check for quota exceeded error
+    if (error.name === 'QuotaExceededError') {
+      console.warn('localStorage quota exceeded, attempting cleanup...');
+      
+      // Try to save a minimal version
+      try {
+        const minimal = {
+          version: state.version,
+          activeProfile: state.activeProfile,
+          profiles: state.profiles,
+          currentBlock: null // Drop current block to save space
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal));
+        console.log('✓ Saved minimal state after quota error');
+        alert('Warning: Storage almost full. Some workout history may not be saved.');
+        return true;
+      } catch (minimalError) {
+        console.error('Even minimal save failed:', minimalError);
+      }
+    }
+    
+    return false;
+  }
 }
 
 function getProfile() {
@@ -4828,15 +5239,179 @@ function importCSV(csvText) {
 }
 
 function boot() {
-  wireButtons();
-  bindWorkoutDetailControls();
-  bindReadinessModal();
-  ensureDaySelectorsBound();
-  showPage('Setup');
-  if (state.currentBlock && state.currentBlock.weeks?.length) {
-    ui.weekIndex = 0;
+  console.log('🚀 Starting boot sequence...');
+  
+  // Track initialization status
+  const initStatus = {
+    wireButtons: false,
+    workoutDetail: false,
+    readiness: false,
+    daySelectors: false,
+    page: false,
+    supabase: false
+  };
+  
+  // Step 1: Wire buttons (critical)
+  try {
+    wireButtons();
+    initStatus.wireButtons = true;
+    console.log('✓ Buttons wired');
+  } catch (error) {
+    console.error('✗ Failed to wire buttons:', error);
   }
-  initSupabase(); // Initialize cloud sync
+  
+  // Step 2: Bind workout detail controls
+  try {
+    bindWorkoutDetailControls();
+    initStatus.workoutDetail = true;
+    console.log('✓ Workout detail controls bound');
+  } catch (error) {
+    console.error('✗ Failed to bind workout detail controls:', error);
+  }
+  
+  // Step 3: Bind readiness modal
+  try {
+    bindReadinessModal();
+    initStatus.readiness = true;
+    console.log('✓ Readiness modal bound');
+  } catch (error) {
+    console.error('✗ Failed to bind readiness modal:', error);
+  }
+  
+  // Step 4: Ensure day selectors bound
+  try {
+    ensureDaySelectorsBound();
+    initStatus.daySelectors = true;
+    console.log('✓ Day selectors bound');
+  } catch (error) {
+    console.error('✗ Failed to bind day selectors:', error);
+  }
+  
+  // Step 5: Show initial page
+  try {
+    showPage('Setup');
+    initStatus.page = true;
+    console.log('✓ Initial page shown');
+  } catch (error) {
+    console.error('✗ Failed to show page:', error);
+  }
+  
+  // Step 6: Initialize week index
+  try {
+    if (state.currentBlock && state.currentBlock.weeks?.length) {
+      ui.weekIndex = 0;
+    }
+    console.log('✓ Week index set');
+  } catch (error) {
+    console.error('✗ Failed to set week index:', error);
+  }
+  
+  // Step 7: Initialize cloud sync (non-critical)
+  try {
+    initSupabase();
+    initStatus.supabase = true;
+    console.log('✓ Supabase initialization started');
+  } catch (error) {
+    console.error('✗ Failed to initialize Supabase:', error);
+  }
+  
+  // Report initialization status
+  const failed = Object.keys(initStatus).filter(k => !initStatus[k]);
+  if (failed.length === 0) {
+    console.log('✅ Boot complete - all systems operational');
+  } else {
+    console.warn(`⚠️ Boot complete with failures: ${failed.join(', ')}`);
+  }
+  
+  // Make boot status available globally for debugging
+  window.liftaiBootStatus = initStatus;
+  
+  // Set up global event delegation for dynamically created elements
+  setupGlobalEventDelegation();
+}
+
+/**
+ * Global event delegation handler
+ * Handles events for dynamically created elements without re-binding
+ */
+function setupGlobalEventDelegation() {
+  console.log('Setting up global event delegation...');
+  
+  // Delegate all clicks on the document body
+  document.body.addEventListener('click', function(e) {
+    const target = e.target;
+    
+    // Handle data-action attributes
+    const action = target.getAttribute('data-action');
+    if (action) {
+      e.preventDefault();
+      handleDataAction(action, target);
+      return;
+    }
+    
+    // Handle buttons with specific IDs dynamically created
+    if (target.id && target.tagName === 'BUTTON') {
+      // Check for day selection buttons
+      if (target.id.startsWith('daySelect_')) {
+        const dayNum = parseInt(target.id.split('_')[1]);
+        if (!isNaN(dayNum)) {
+          toggleDaySelection(dayNum);
+          return;
+        }
+      }
+      
+      // Check for accessory day selection
+      if (target.id.startsWith('accDaySelect_')) {
+        const dayNum = parseInt(target.id.split('_')[1]);
+        if (!isNaN(dayNum)) {
+          toggleAccessoryDaySelection(dayNum);
+          return;
+        }
+      }
+    }
+  });
+  
+  console.log('✓ Global event delegation ready');
+}
+
+/**
+ * Handle data-action attributes
+ */
+function handleDataAction(action, element) {
+  const actions = {
+    'open-workout-detail': () => {
+      const weekIndex = parseInt(element.getAttribute('data-week-index'));
+      const dayIndex = parseInt(element.getAttribute('data-day-index'));
+      if (!isNaN(weekIndex) && !isNaN(dayIndex)) {
+        const weekData = state.currentBlock?.weeks[weekIndex];
+        if (weekData) {
+          openWorkoutDetail(weekIndex, dayIndex, weekData.days[dayIndex]);
+        }
+      }
+    },
+    'toggle-set-complete': () => {
+      const setKey = element.getAttribute('data-set-key');
+      if (setKey) {
+        toggleSetComplete(setKey);
+      }
+    },
+    'start-rest-timer': () => {
+      const exerciseKey = element.getAttribute('data-exercise-key');
+      const duration = parseInt(element.getAttribute('data-duration')) || 180;
+      if (exerciseKey) {
+        startRestTimer(duration, exerciseKey);
+      }
+    }
+  };
+  
+  const handler = actions[action];
+  if (handler) {
+    try {
+      handler();
+    } catch (error) {
+      console.error(`Error handling action ${action}:`, error);
+    }
+  }
 }
 
 // Boot function will be called from index.html
